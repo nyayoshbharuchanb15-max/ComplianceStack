@@ -1,6 +1,6 @@
 # ComplianceStack — AI Governance Platform
 
-**Enterprise-grade AI compliance and governance platform with zero-data-egress auditing** — EU AI Act, NIST AI RMF, ISO/IEC 42001, GDPR, India DPDP Act
+**Enterprise-grade AI compliance and governance platform with zero-data-egress auditing with zero-data-egress auditing** — EU AI Act, NIST AI RMF, ISO/IEC 42001, GDPR, India DPDP Act
 
 [![CI](https://github.com/nyayoshbharuchanb15-max/ComplianceStack/actions/workflows/ci.yml/badge.svg)](https://github.com/nyayoshbharuchanb15-max/ComplianceStack/actions)
 [![License](https://img.shields.io/badge/license-dual--commercial-blue)](./LICENSE.md)
@@ -105,7 +105,7 @@ Add to `claude_desktop_config.json`:
 ```json
 {
   "mcpServers": {
-    "ai-governance": {
+    "compliance-stack": {
       "command": "docker",
       "args": ["exec", "-i", "ai-governance-mcp", "node", "dist/index.js"],
       "env": { "PYTHON_BACKEND_URL": "http://python-backend:8000" }
@@ -119,7 +119,7 @@ Add to `claude_desktop_config.json`:
 ```json
 {
   "mcpServers": {
-    "ai-governance": {
+    "compliance-stack": {
       "url": "http://localhost:3000/sse"
     }
   }
@@ -256,6 +256,6 @@ See [LICENSE.md](./LICENSE.md) for complete terms.
 
 ### Intellectual Property
 
-All code, documentation, trademarks ("AI Governance MCP Server"), and associated
+All code, documentation, trademarks ("ComplianceStack"), and associated
 IP are the exclusive property of the copyright holder. Contributions are accepted
 under the terms of the [Developer Certificate of Origin](./CONTRIBUTING.md).
