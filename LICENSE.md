@@ -1,4 +1,4 @@
-# AI Governance MCP Server — License Agreement
+# ComplianceStack — License Agreement
 
 **Copyright © 2026 Nyayosh Bharuchanb15-Max. All rights reserved.**
 
@@ -55,7 +55,7 @@ Agreement with the copyright holder.
   within 14 days of going live.
 
 To obtain a Commercial License, contact:
-- **GitHub**: https://github.com/nyayoshbharuchanb15-max/AI-GOVERNANCE/issues
+- **GitHub**: https://github.com/nyayoshbharuchanb15-max/ComplianceStack/issues
 
 ---
 
@@ -68,10 +68,10 @@ copyright notice, this license text, and attribution to the original author
 in the following format:
 
 ```
-Original work: AI Governance MCP Server
+Original work: ComplianceStack
 Copyright (c) 2026 Nyayosh Bharuchanb15-Max
-Licensed under the AI Governance MCP Server License Agreement
-https://github.com/nyayoshbharuchanb15-max/AI-GOVERNANCE
+Licensed under the ComplianceStack License Agreement
+https://github.com/nyayoshbharuchanb15-max/ComplianceStack
 ```
 
 ### 2.2 Attribution Placement
@@ -91,7 +91,7 @@ remain the exclusive property of the copyright holder. This License does not
 transfer any ownership rights.
 
 ### 3.2 Trademark
-The name "AI Governance MCP Server" and associated logos are trademarks of
+The name "ComplianceStack" and associated logos are trademarks of
 the copyright holder. Use of these marks is prohibited without express
 written permission.
 
@@ -144,4 +144,4 @@ copies. Sections 2, 3, 4, 5, 6, and 7 survive termination.
 ---
 
 *For licensing inquiries, please open an issue at:*
-*https://github.com/nyayoshbharuchanb15-max/AI-GOVERNANCE/issues*
+*https://github.com/nyayoshbharuchanb15-max/ComplianceStack/issues*

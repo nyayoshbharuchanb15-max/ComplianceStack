@@ -1,7 +1,7 @@
-# AI Governance MCP Server — Technical Portfolio
+# ComplianceStack — Technical Portfolio
 
 **Author:** Nyayosh Bharuchanb15-Max  
-**Repository:** https://github.com/nyayoshbharuchanb15-max/AI-GOVERNANCE  
+**Repository:** https://github.com/nyayoshbharuchanb15-max/ComplianceStack  
 **Version:** 2.0.0
 
 ---
@@ -34,11 +34,11 @@ Sequential phase dependency model where a single critical finding (e.g., missing
 
 ```
 ┌──────────────────────┐     ┌──────────────────────────────────────────────┐
-│   AI Assistant       │     │         AI Governance MCP Server             │
+│   AI Assistant       │     │         ComplianceStack MCP Server           │
 │  (Claude Desktop,    │◄───►│                                              │
 │   Cursor, etc.)      │     │  TypeScript MCP Server        Python Backend │
 │                      │     │  ┌──────────────────┐     ┌───────────────┐  │
-│  OAuth 2.1 + RBAC ───┤     │  │ 11 MCP Tools      │────►│ FastAPI        │  │
+│  OAuth 2.1 + RBAC ───┤     │  │ 17 MCP Tools      │────►│ FastAPI        │  │
 │  PII Middleware ─────┤     │  │ (Risk, Bias,      │     │ (Audit Logic)  │  │
 │  Rate Limiting ──────┤     │  │  DPIA, Drift...)  │     │               │  │
 │                      │     │  └──────────────────┘     └───────┬───────┘  │
@@ -71,7 +71,7 @@ Sequential phase dependency model where a single critical finding (e.g., missing
 
 | Component | Technology | Purpose |
 |---|---|---|
-| MCP Server | TypeScript + @modelcontextprotocol/sdk | 11 audit tools via MCP protocol |
+| MCP Server | TypeScript + @modelcontextprotocol/sdk | 17 audit tools via MCP protocol |
 | Backend | Python + FastAPI | All ML/audit logic |
 | Evidence Store | PostgreSQL 16 + asyncpg | JSONB audit evidence with Merkle tree |
 | Provenance Graph | Neo4j 5 + async driver | Supply chain lineage tracking |
@@ -90,7 +90,7 @@ Sequential phase dependency model where a single critical finding (e.g., missing
 - 11 FastAPI routers (9 audit phases + auth + DPDP + ROPA + DSAR)
 - 12 service modules (bias, drift, crypto, discovery, erasure, etc.)
 - 5 middleware modules (PII, rate limit, request ID, body size, auth)
-- 11 MCP tool definitions with JSON Schema
+- 17 MCP tool definitions with JSON Schema
 - 7 test files (pytest + pytest-asyncio)
 - 1 CI/CD pipeline
 - 1 Docker Compose stack (5 services)

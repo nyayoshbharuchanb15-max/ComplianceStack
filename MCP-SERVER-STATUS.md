@@ -10,7 +10,7 @@ The ComplianceStack MCP Server is a **complete, functional TypeScript implementa
 
 ### Build Verification
 ```bash
-cd /Users/apple/Desktop/AI-GOVERNANCE-main/mcp-server
+cd /Users/apple/Desktop/ComplianceStack-main/mcp-server
 node -v  # Node.js v18+
 # ✅ TypeScript compiled without errors
 # ✅ All tool definitions (17 tools) are properly implemented
