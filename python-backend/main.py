@@ -41,6 +41,7 @@ from middleware.request_id import RequestIDMiddleware
 from middleware.rate_limit import RateLimitMiddleware
 from middleware.body_size_limit import BodySizeLimitMiddleware
 from models.schemas import HealthResponse
+from services.timestamping import trusted_timestamp
 
 logger = logging.getLogger("main")
 
@@ -92,6 +93,12 @@ async def lifespan(app: FastAPI):
     yield
 
     # ── Shutdown ────────────────────────────────────────────────
+    # Flush any pending timestamp anchors
+    try:
+        trusted_timestamp.flush_batch()
+    except Exception:
+        logger.warning("Failed to flush timestamp batch on shutdown")
+
     await pg_client.close()
     await neo4j_client.close()
     await webhook_engine.close()
@@ -182,6 +189,15 @@ async def _probe_crypto() -> str:
         return "unavailable"
 
 
+async def _probe_timestamping() -> str:
+    try:
+        pending = trusted_timestamp.pending_batch_size
+        anchored = len(trusted_timestamp.get_anchored_roots())
+        return f"operational (pending={pending}, anchored={anchored})"
+    except Exception:
+        return "unavailable"
+
+
 @app.get("/health", response_model=HealthResponse)
 async def health_check():
     """Health check endpoint with deep probes of all dependencies."""
@@ -189,9 +205,12 @@ async def health_check():
     neo4j_status = await _probe_neo4j()
     redis_status = await _probe_redis()
     crypto_status = await _probe_crypto()
+    timestamping_status = await _probe_timestamping()
 
     overall = "ok"
-    if any(s in ("unreachable", "malfunction") for s in (postgres_status, neo4j_status, redis_status, crypto_status)):
+    if any(s in ("unreachable", "malfunction", "unavailable") for s in (
+        postgres_status, neo4j_status, redis_status, crypto_status, timestamping_status
+    )):
         overall = "degraded"
     if all(s == "disconnected" for s in (postgres_status, neo4j_status, redis_status)):
         overall = "unavailable"
@@ -204,6 +223,7 @@ async def health_check():
             "neo4j": neo4j_status,
             "redis": redis_status,
             "crypto": crypto_status,
+            "timestamping": timestamping_status,
         },
     )
 
@@ -229,6 +249,7 @@ from routers.prompt_audit import router as prompt_audit_router
 from routers.agent_trust import router as agent_trust_router
 from routers.tool_permissions import router as tool_permissions_router
 from routers.agent_autonomy import router as agent_autonomy_router
+from routers.crl import router as crl_router
 
 app.include_router(auth_router)
 app.include_router(risk_router)
@@ -249,3 +270,4 @@ app.include_router(prompt_audit_router)
 app.include_router(agent_trust_router)
 app.include_router(tool_permissions_router)
 app.include_router(agent_autonomy_router)
+app.include_router(crl_router)

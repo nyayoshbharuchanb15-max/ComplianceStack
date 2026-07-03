@@ -18,7 +18,7 @@ from models.schemas import (
 )
 from services.auth import Scope, require_scope
 from services.prompt_template_auditor import audit_prompt_templates
-from services.evidence_store import record_audit_evidence
+from services.evidence_store import record_audit_evidence, log_audit_event
 
 router = APIRouter(prefix="/api/prompt-audit", tags=["Prompt Template Audit"])
 
@@ -50,6 +50,15 @@ async def evaluate_prompts(request: AuditPromptTemplatesRequest, request_obj: Re
         model_id=request.modelId,
         audit_phase="prompt_template_audit",
         payload=report.model_dump(),
+    )
+
+    # Log audit trail
+    await log_audit_event(
+        model_id=request.modelId,
+        phase="prompt_template_audit",
+        action="prompt_templates_audited",
+        outcome="success",
+        details={"overall_risk": report.overallRisk.value},
     )
 
     return report

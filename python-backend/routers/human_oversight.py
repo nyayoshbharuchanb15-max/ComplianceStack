@@ -25,7 +25,7 @@ from models.schemas import (
     OversightLevel,
 )
 from services.auth import Scope, require_scope
-from services.evidence_store import record_audit_evidence
+from services.evidence_store import record_audit_evidence, log_audit_event
 
 router = APIRouter(prefix="/api/human-oversight", tags=["Human Oversight"])
 
@@ -104,6 +104,15 @@ async def verify_human_oversight(request: VerifyHumanOversightRequest, request_o
         model_id=request.modelId,
         audit_phase="human_oversight_verification",
         payload=report.model_dump(),
+    )
+
+    # Log audit trail
+    await log_audit_event(
+        model_id=request.modelId,
+        phase="human_oversight_verification",
+        action="oversight_verified",
+        outcome="success",
+        details={"blocker": blocker, "compliant": compliant},
     )
 
     return report

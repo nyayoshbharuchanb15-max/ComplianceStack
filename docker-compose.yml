@@ -114,11 +114,11 @@ services:
       CORS_ORIGINS: ${CORS_ORIGINS:-http://localhost:3000,http://localhost:8080,http://localhost:3001}
       TRUSTED_HOSTS: ${TRUSTED_HOSTS:-localhost,python-backend,mcp-server,127.0.0.1}
       DEMO_MODE: ${DEMO_MODE:-true}
-      ADV_ENDPOINT_URL: ${ADV_ENDPOINT_URL:-}
-      ADV_API_KEY: ${ADV_API_KEY:-}
-      ADV_TARGET_MODEL: ${ADV_TARGET_MODEL:-gpt-4o-mini}
-      ADV_JUDGE_MODEL: ${ADV_JUDGE_MODEL:-gpt-4o-mini}
-      ADV_EMBEDDING_MODEL: ${ADV_EMBEDDING_MODEL:-all-MiniLM-L6-v2}
+      ADV_ENDPOINT_URL: ${ADV_ENDPOINT_URL:-}         # Optional: external LLM endpoint for adversarial testing; empty = local/skipped
+      ADV_API_KEY: ${ADV_API_KEY:-}                    # Optional: API key for ADV_ENDPOINT_URL (only needed if set)
+      ADV_TARGET_MODEL: ${ADV_TARGET_MODEL:-gpt-4o-mini}  # Model at external endpoint for test generation
+      ADV_JUDGE_MODEL: ${ADV_JUDGE_MODEL:-gpt-4o-mini}    # Model at external endpoint for test evaluation
+      ADV_EMBEDDING_MODEL: ${ADV_EMBEDDING_MODEL:-all-MiniLM-L6-v2}  # Embedding model (local or external)
       RATE_LIMIT_AUTH: ${RATE_LIMIT_AUTH:-20}
       RATE_LIMIT_WRITE: ${RATE_LIMIT_WRITE:-60}
       RATE_LIMIT_READ: ${RATE_LIMIT_READ:-120}
@@ -149,15 +149,19 @@ services:
       NODE_ENV: production
       AUTH_TOKEN: ${AUTH_TOKEN:-}
       MCP_TRANSPORT: ${MCP_TRANSPORT:-stdio}
+      PORT: ${MCP_PORT:-3000}
     ports:
-      - "3000:3000"   # SSE port
-    # MCP supports both stdio (for Claude Desktop) and SSE (for web clients)
-    # The SSE transport is exposed on port 3000
+      - "${MCP_PORT:-3000}:${MCP_PORT:-3000}"   # SSE / Streamable HTTP port
+    # MCP supports all three transport modes:
+    #   - stdio: Claude Desktop integration (default)
+    #   - sse: Web-based MCP clients via GET /sse + POST /messages
+    #   - streamable-http: Modern MCP clients via POST/GET/DELETE /mcp
+    # Set MCP_TRANSPORT=streamable-http or MCP_TRANSPORT=sse in .env to enable
     stdin_open: true   # stdio mode for Claude Desktop integration
     tty: true
     command: ["node", "dist/index.js"]
     healthcheck:
-      test: ["CMD-SHELL", "curl -sf http://localhost:3000/health || exit 1"]
+      test: ["CMD-SHELL", "curl -sf http://localhost:${MCP_PORT:-3000}/health || exit 1"]
       interval: 15s
       timeout: 5s
       retries: 3

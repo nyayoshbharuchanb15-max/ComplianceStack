@@ -23,7 +23,7 @@ from models.schemas import GenerateCertificateRequest, AuditCertificate, Verifia
 from models.verifiable_credential import VCIssuer, VerifiableCredential as VCModel
 from services.auth import Scope, require_scope
 from services.crypto_signer import crypto_signer
-from services.evidence_store import record_audit_evidence, record_certificate
+from services.evidence_store import record_audit_evidence, record_certificate, log_audit_event
 
 router = APIRouter(prefix="/api/certificate", tags=["Certificate"])
 
@@ -65,6 +65,7 @@ async def generate_audit_certificate(request: GenerateCertificateRequest, reques
             "NIST AI RMF (NIST AI 100-1)",
             "ISO/IEC 42001:2023",
             "GDPR (Regulation 2016/679)",
+            "DPDP Act 2023",
         ],
     }
 
@@ -75,10 +76,23 @@ async def generate_audit_certificate(request: GenerateCertificateRequest, reques
     )
 
     # ── Step 4: Generate cryptographic signature ─────────────────
-    # Canonicalize and sign the payload per W3C standards
-    canonical_payload = vc.to_signing_payload()
-    signature = crypto_signer.sign_payload(canonical_payload)
-    verification_method = crypto_signer.verification_method
+    try:
+        # Canonicalize and sign the payload per W3C standards
+        canonical_payload = vc.to_signing_payload()
+        signature = crypto_signer.sign_payload(canonical_payload)
+        verification_method = crypto_signer.verification_method
+    except Exception as crypto_err:
+        await log_audit_event(
+            model_id=request.modelId,
+            phase="certificate_generation",
+            action="certificate_generated",
+            outcome="failure",
+            details={"error": f"Crypto operation failed: {str(crypto_err)}"},
+        )
+        raise HTTPException(
+            status_code=500,
+            detail=f"Certificate signing failed: {str(crypto_err)}",
+        )
 
     # ── Step 5: Attach proof ─────────────────────────────────────
     vc.proof.proofValue = signature
@@ -106,6 +120,15 @@ async def generate_audit_certificate(request: GenerateCertificateRequest, reques
         model_id=request.modelId,
         vc_payload=vc_json,
         evidence_id=evidence_id,
+    )
+
+    # Log audit trail
+    await log_audit_event(
+        model_id=request.modelId,
+        phase="certificate_generation",
+        action="certificate_generated",
+        outcome="success",
+        details={"evidence_id": evidence_id, "score": request.weightedScore},
     )
 
     # ── Step 8: Build response ──────────────────────────────────

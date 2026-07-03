@@ -16,7 +16,7 @@ ISO/IEC 42001:2023 Clause 6.2 — Data protection impact assessment.
 from fastapi import APIRouter, HTTPException, Request
 from models.schemas import GenerateDPIAARequest, DPIAReport, DPIASection, RiskLevel
 from services.auth import Scope, require_scope
-from services.evidence_store import record_audit_evidence
+from services.evidence_store import record_audit_evidence, log_audit_event
 
 router = APIRouter(prefix="/api/dpia", tags=["DPIA"])
 
@@ -68,6 +68,15 @@ async def generate_dpia(request: GenerateDPIAARequest, request_obj: Request):
         model_id=request.modelId,
         audit_phase="dpia_generation",
         payload=report.model_dump(),
+    )
+
+    # Log audit trail
+    await log_audit_event(
+        model_id=request.modelId,
+        phase="dpia_generation",
+        action="dpia_generated",
+        outcome="success",
+        details={"dpia_required": dpia_required, "compliant": compliant},
     )
 
     return report

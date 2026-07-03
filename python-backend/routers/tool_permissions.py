@@ -19,7 +19,7 @@ from models.schemas import (
 )
 from services.auth import Scope, require_scope
 from services.tool_permission_auditor import audit_tool_permissions
-from services.evidence_store import record_audit_evidence
+from services.evidence_store import record_audit_evidence, log_audit_event
 
 router = APIRouter(prefix="/api/tool-permissions", tags=["Tool Permission Audit"])
 
@@ -49,6 +49,15 @@ async def evaluate_permissions(request: AuditToolPermissionsRequest, request_obj
         model_id=request.modelId,
         audit_phase="tool_permission_audit",
         payload=report.model_dump(),
+    )
+
+    # Log audit trail
+    await log_audit_event(
+        model_id=request.modelId,
+        phase="tool_permission_audit",
+        action="tool_permissions_evaluated",
+        outcome="success",
+        details={"overall_risk": report.overallRisk.value},
     )
 
     return report

@@ -3,7 +3,8 @@
 // microservices. Supports authentication via Bearer tokens.
 //
 // Security: The MCP server authenticates with the Python backend using
-// a service account token. All PII and model data stays on-premise.
+// a service account token. Individual user context (role, scopes) is
+// forwarded via X-MCP-User-* headers for per-user RBAC enforcement.
 
 const PYTHON_BACKEND_URL = process.env.PYTHON_BACKEND_URL || "http://localhost:8000";
 const AUTH_TOKEN = process.env.AUTH_TOKEN || "";
@@ -12,14 +13,18 @@ interface FetchOptions {
   method?: string;
   body?: unknown;
   timeout?: number;
-  authScope?: string;  // Optional scope override for the request
+  userContext?: {
+    userId: string;
+    role: string;
+    scopes: string[];
+  };
 }
 
 export async function callPythonBackend<T>(
   path: string,
   opts: FetchOptions = {},
 ): Promise<T> {
-  const { method = "POST", body, timeout = 60000 } = opts;
+  const { method = "POST", body, timeout = 60000, userContext } = opts;
 
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), timeout);
@@ -35,6 +40,13 @@ export async function callPythonBackend<T>(
 
   // Attach request ID for audit trail correlation
   headers["X-Request-ID"] = crypto.randomUUID();
+
+  // Forward per-user context for RBAC enforcement at the backend
+  if (userContext) {
+    headers["X-MCP-User-ID"] = userContext.userId;
+    headers["X-MCP-User-Role"] = userContext.role;
+    headers["X-MCP-User-Scopes"] = userContext.scopes.join(",");
+  }
 
   try {
     const response = await fetch(`${PYTHON_BACKEND_URL}${path}`, {

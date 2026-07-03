@@ -181,6 +181,37 @@ COMMENT ON TABLE pii_redactions IS
   'PII redaction audit log — field names only, no PII values. '
   'GDPR Art. 5(1)(c) data minimisation compliance evidence.';
 
+-- ─── Audit Trail (Mutation Log) ───────────────────────────────────
+--  GDPR Art. 5(2) — Accountability: controller must demonstrate compliance.
+--  ISO 42001:2023 Clause 7.5 — Documented information includes mutation history.
+--  EU AI Act Art. 12 — Technical documentation must include audit events.
+
+CREATE TABLE IF NOT EXISTS audit_trail (
+    event_id        UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    model_id        VARCHAR(255) NOT NULL,
+    phase           VARCHAR(100) NOT NULL,
+    action          VARCHAR(100) NOT NULL,
+    -- e.g., 'risk_classified', 'certificate_generated', 'evidence_stored'
+    actor           VARCHAR(255) NOT NULL DEFAULT 'system',
+    -- Who performed the action: 'system', 'user:<id>', 'mcp:<id>'
+    outcome         VARCHAR(50) NOT NULL DEFAULT 'success',
+    -- 'success', 'failure', 'partial'
+    details         JSONB,
+    -- Additional context: error messages, input summary, etc.
+    created_at      TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+CREATE INDEX IF NOT EXISTS idx_audit_trail_model ON audit_trail (model_id);
+CREATE INDEX IF NOT EXISTS idx_audit_trail_phase ON audit_trail (phase);
+CREATE INDEX IF NOT EXISTS idx_audit_trail_created ON audit_trail (created_at DESC);
+CREATE INDEX IF NOT EXISTS idx_audit_trail_action ON audit_trail (action);
+
+COMMENT ON TABLE audit_trail IS
+  'Audit trail mutation log — GDPR Art. 5(2) accountability. '
+  'Records every audit phase execution with actor, outcome, and timestamp.';
+COMMENT ON COLUMN audit_trail.action IS
+  'Action performed: risk_classified, supply_chain_audited, certificate_generated, etc.';
+
 -- ─── Retention Policy Function ───────────────────────────────────
 --  GDPR Art. 5(1)(e): Enforce storage limitation.
 

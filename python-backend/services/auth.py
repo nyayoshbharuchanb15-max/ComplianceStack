@@ -58,9 +58,27 @@ _AUTH_KEY_PROVIDER = EnvironmentKeyProvider(
     path_var="AUTH_PRIVATE_KEY_PATH",
 )
 
+PRODUCTION_MODE = os.environ.get("PRODUCTION_MODE", "false").lower() in ("1", "true", "yes")
+
 try:
     _private_key_pem: bytes = _AUTH_KEY_PROVIDER.get_private_key()
 except KeyNotFoundError:
+    if PRODUCTION_MODE:
+        raise RuntimeError(
+            "╔══════════════════════════════════════════════════════════════════╗\n"
+            "║  FATAL: PRODUCTION MODE requires AUTH_PRIVATE_KEY or             ║\n"
+            "║  AUTH_PRIVATE_KEY_PATH to be set. Ephemeral keys are not        ║\n"
+            "║  permitted in production.                                       ║\n"
+            "║                                                                 ║\n"
+            "║  Generate a key pair:                                           ║\n"
+            "║    openssl genrsa -out private.pem 2048                         ║\n"
+            "║    openssl rsa -in private.pem -pubout -out public.pem          ║\n"
+            "║                                                                 ║\n"
+            "║  Set environment variables:                                     ║\n"
+            "║    AUTH_PRIVATE_KEY=<PEM contents>                              ║\n"
+            "║    or AUTH_PRIVATE_KEY_PATH=/path/to/private.pem                ║\n"
+            "╚══════════════════════════════════════════════════════════════════╝"
+        )
     warnings.warn(
         "╔══════════════════════════════════════════════════════════════════╗\n"
         "║  WARNING: EPHEMERAL RSA KEY — NOT FOR PRODUCTION                ║\n"
@@ -218,6 +236,9 @@ async def auth_middleware(request: Request, call_next: Callable):
 
     Routes under /health and /api/auth are public.
     All other /api/* routes require authentication.
+
+    Per-user RBAC: When the MCP server forwards user context via
+    X-MCP-User-* headers, those are used for per-user scope enforcement.
     """
     path = request.url.path
 
@@ -259,6 +280,17 @@ async def auth_middleware(request: Request, call_next: Callable):
                 content={"error": "invalid_token", "detail": "Token validation failed"},
                 headers={"WWW-Authenticate": "Bearer"},
             )
+
+        # Per-user RBAC: If MCP server forwards user context, use it
+        mcp_user_id = request.headers.get("X-MCP-User-ID")
+        mcp_user_role = request.headers.get("X-MCP-User-Role")
+        mcp_user_scopes = request.headers.get("X-MCP-User-Scopes")
+        if mcp_user_id:
+            request.state.user = mcp_user_id
+        if mcp_user_role:
+            request.state.role = mcp_user_role
+        if mcp_user_scopes:
+            request.state.scopes = [s.strip() for s in mcp_user_scopes.split(",")]
 
     return await call_next(request)
 

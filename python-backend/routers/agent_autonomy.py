@@ -18,7 +18,7 @@ from models.schemas import (
 )
 from services.auth import Scope, require_scope
 from services.agent_autonomy_classifier import classify_autonomy
-from services.evidence_store import record_audit_evidence
+from services.evidence_store import record_audit_evidence, log_audit_event
 
 router = APIRouter(prefix="/api/agent-autonomy", tags=["Agent Autonomy Classification"])
 
@@ -52,6 +52,15 @@ async def classify_level(request: ClassifyAgentAutonomyRequest, request_obj: Req
         model_id=request.modelId,
         audit_phase="agent_autonomy_classification",
         payload=result.model_dump(),
+    )
+
+    # Log audit trail
+    await log_audit_event(
+        model_id=request.modelId,
+        phase="agent_autonomy_classification",
+        action="autonomy_classified",
+        outcome="success",
+        details={"autonomy_level": result.autonomyLevel.value},
     )
 
     return result

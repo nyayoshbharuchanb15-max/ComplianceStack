@@ -1,6 +1,7 @@
 // ═══════════════════════════════════════════════════════════════════
-//  ComplianceStack MCP Server — Complete Implementation
-//  Exposes 17 audit tools via the Model Context Protocol SDK.
+//  ComplianceStack MCP Server — Complete Implementation v3.1.0
+//  Exposes 17 audit tools, 5 resources, and 4 prompts via the
+//  Model Context Protocol SDK with all three transport modes.
 //  Connected to Python FastAPI Backend for all audit logic.
 //  ================================================================
 
@@ -10,8 +11,17 @@ import { SSEServerTransport } from "@modelcontextprotocol/sdk/server/sse.js";
 import {
   CallToolRequestSchema,
   ListToolsRequestSchema,
+  ListResourcesRequestSchema,
+  ReadResourceRequestSchema,
+  ListPromptsRequestSchema,
+  GetPromptRequestSchema,
+  CancelledNotificationSchema,
+  ErrorCode,
+  McpError,
 } from "@modelcontextprotocol/sdk/types.js";
+import express from "express";
 import { callPythonBackend } from "./client.js";
+import { validateToolInput } from "./validator.js";
 import type {
   RiskTierResult,
   ProvenanceReport,
@@ -31,531 +41,197 @@ import type {
   ToolPermissionReport,
   AgentAutonomyResult,
 } from "./types.js";
+import { TOOL_SCHEMAS } from "./tool-schemas.js";
 
-// ─── Response Formatter ──────────────────────────────────────────
+// ─── Constants ────────────────────────────────────────────────────
+const SERVER_VERSION = "3.1.0";
+const SERVER_NAME = "compliance-stack-mcp-server";
+
+// ─── Structured MCP Error Helper ──────────────────────────────────
+
+function mcpError(code: ErrorCode, message: string, data?: unknown): {
+  content: Array<{ type: "text"; text: string }>;
+  isError: true;
+} {
+  const error = new McpError(code, message, data);
+  return {
+    content: [{ type: "text", text: `[MCP Error ${code}] ${message}` }],
+    isError: true as const,
+  };
+}
+
+// ─── Progress Notification Helper ─────────────────────────────────
+
+async function sendProgress(
+  sendNotification: (notification: Record<string, unknown>) => Promise<void>,
+  progressToken: string | number | undefined,
+  progress: number,
+  total: number,
+  message?: string,
+): Promise<void> {
+  if (progressToken !== undefined) {
+    await sendNotification({
+      method: "notifications/progress",
+      params: {
+        progressToken,
+        progress,
+        total,
+        ...(message ? { message } : {}),
+      },
+    });
+  }
+}
+
+// ─── Response Formatters ──────────────────────────────────────────
 
 function formatSuccess(result: unknown, label: string) {
   return {
     content: [
       {
-        type: "text",
+        type: "text" as const,
         text: `📋 ${label} Result:\n\`\`\`json\n${JSON.stringify(result, null, 2)}\n\`\`\``,
       },
     ],
   };
 }
 
-// ─── MCP Server Instance ─────────────────────────────────────────
+function formatResource(uri: string, mimeType: string, text: string) {
+  return {
+    contents: [
+      {
+        uri,
+        mimeType,
+        text,
+      },
+    ],
+  };
+}
+
+// ─── Cancellation Tracking ────────────────────────────────────────
+
+const cancelledRequests = new Set<string | number>();
+
+function isCancelled(requestId: string | number): boolean {
+  return cancelledRequests.has(requestId);
+}
+
+// ─── MCP Server Instance ──────────────────────────────────────────
 
 const server = new Server(
   {
-    name: "compliance-stack-mcp-server",
-    version: "2.0.0",
+    name: SERVER_NAME,
+    version: SERVER_VERSION,
   },
   {
     capabilities: {
-      tools: {},
+      tools: {
+        listChanged: true,
+      },
+      resources: {
+        listChanged: true,
+      },
+      prompts: {
+        listChanged: true,
+      },
+      logging: {},
     },
   },
 );
 
-// ─── Tool Schemas ─────────────────────────────────────────────────
+// ═══════════════════════════════════════════════════════════════════
+//  TOOL DEFINITIONS — Rigorous JSON Schema with full validation
+// ═══════════════════════════════════════════════════════════════════
 
-const TOOLS = [
+const TOOLS = TOOL_SCHEMAS.map((t) => ({
+  name: t.name,
+  description: t.description,
+  inputSchema: t.inputSchema,
+}));
+
+// ═══════════════════════════════════════════════════════════════════
+//  MCP RESOURCES — Regulatory framework references
+// ═══════════════════════════════════════════════════════════════════
+
+const RESOURCES = [
   {
-    name: "assess_dpdp_compliance",
-    description:
-      "Assesses AI model compliance against the India DPDP Act 2023 (Sec. 5–14). " +
-      "Evaluates consent mechanisms, fiduciary duties, data principal rights, and DPO requirements. " +
-      "🔗 DPDP Act 2023 | ISO/IEC 42001 Clause 6.2",
-    inputSchema: {
-      type: "object",
-      properties: {
-        modelId: { type: "string", description: "Unique model identifier" },
-        dataFiduciary: { type: "string", description: "Name/entity of the Data Fiduciary" },
-      },
-      required: ["modelId", "dataFiduciary"],
-    },
+    uri: "compliance://frameworks/eu-ai-act",
+    name: "EU AI Act (Regulation 2024/1689)",
+    description: "European Union Artificial Intelligence Act risk classification framework. Covers prohibited AI practices (Art. 5), high-risk classification (Art. 6, Annex III), transparency obligations (Art. 50), and conformity assessment procedures.",
+    mimeType: "application/json",
   },
   {
-    name: "discover_supply_chain",
-    description:
-      "Automatically discovers ML models and datasets on the filesystem and populates the Neo4j provenance graph. " +
-      "🔗 EU AI Act Art. 10 | ISO/IEC 42001 Clause 7.4.3",
-    inputSchema: {
-      type: "object",
-      properties: {
-        modelId: { type: "string", description: "Unique model identifier" },
-        modelSearchPaths: {
-          type: "array",
-          items: { type: "string" },
-          description: "Optional directories to scan for model artifacts",
-        },
-        dataSearchPaths: {
-          type: "array",
-          items: { type: "string" },
-          description: "Optional directories to scan for dataset files",
-        },
-      },
-      required: ["modelId"],
-    },
+    uri: "compliance://frameworks/gdpr",
+    name: "GDPR (Regulation 2016/679)",
+    description: "General Data Protection Regulation compliance framework. Covers data protection principles (Art. 5), lawfulness of processing (Art. 6), DPIA requirements (Art. 35), ROPA (Art. 30), and cross-border transfer mechanisms (Art. 44–49).",
+    mimeType: "application/json",
   },
   {
-    name: "classify_ai_risk",
-    description:
-      "Classifies an AI model into an EU AI Act risk tier (Prohibited, High, Limited, Minimal). " +
-      "🔗 EU AI Act Art. 6, Annex I–III | NIST AI RMF MAP 1.1 | ISO/IEC 42001 Clause 6.1",
-    inputSchema: {
-      type: "object",
-      properties: {
-        modelId: { type: "string", description: "Unique model identifier (e.g. 'model-llm-v2')" },
-        modelType: {
-          type: "string",
-          enum: ["general_purpose_ai", "biometric", "critical_infrastructure", "educational", "employment", "credit", "law_enforcement", "other"],
-          description: "Category of the AI system per EU AI Act Annex III",
-        },
-        sector: {
-          type: "string",
-          enum: ["healthcare", "finance", "criminal_justice", "employment", "education", "critical_infrastructure", "other"],
-          description: "Deployment sector for risk context",
-        },
-        usesProfiling: { type: "boolean", description: "Does the system perform profiling of natural persons?" },
-        deployer: { type: "string", description: "Name of the deploying organization" },
-      },
-      required: ["modelId", "modelType", "sector"],
-    },
+    uri: "compliance://frameworks/nist-ai-rmf",
+    name: "NIST AI RMF (AI 100-1)",
+    description: "NIST AI Risk Management Framework. Covers MAP 1.1 (risk identification), GOVERN 1.2/3.2 (governance), MEASURE 1.3/2.2/3.3/4.1 (measurement and monitoring).",
+    mimeType: "application/json",
   },
   {
-    name: "audit_supply_chain",
-    description:
-      "Audits the AI model's supply chain via the Neo4j provenance graph. " +
-      "Traces data lineage, IP clearance, and third-party dependencies. " +
-      "🔗 EU AI Act Art. 10, 12 | NIST AI RMF GOVERN 1.2 | ISO/IEC 42001 Clause 7.4.3",
-    inputSchema: {
-      type: "object",
-      properties: {
-        modelId: { type: "string", description: "Unique model identifier" },
-        deepScan: {
-          type: "boolean",
-          description: "Perform recursive scan of all transitive dependencies",
-          default: false,
-        },
-      },
-      required: ["modelId"],
-    },
+    uri: "compliance://frameworks/iso-42001",
+    name: "ISO/IEC 42001:2023",
+    description: "AI Management System standard. Covers Clause 6.1 (risk assessment), 6.2 (objectives), 7.4.3 (supply chain), 7.5 (documented information), 8.1.2/8.1.3 (operational planning), 8.2 (risk assessment), 9.1 (monitoring).",
+    mimeType: "application/json",
   },
   {
-    name: "verify_human_oversight",
-    description:
-      "Verifies human-in-the-loop (HITL) and human-over-the-loop (HOTL) controls. " +
-      "Returns a BLOCKER FAIL if kill-switch or oversight mechanisms are absent. " +
-      "🔗 EU AI Act Art. 14 | NIST AI RMF GOVERN 3.2 | ISO/IEC 42001 Clause 8.2 | GDPR Art. 22",
-    inputSchema: {
-      type: "object",
-      properties: {
-        modelId: { type: "string", description: "Unique model identifier" },
-        hasHumanInTheLoop: { type: "boolean", description: "Does the system support HITL review?" },
-        hasKillSwitch: { type: "boolean", description: "Does the system have a physical/software kill-switch?" },
-        oversightProcess: {
-          type: "string",
-          description: "Description of the human oversight process in place",
-        },
-        deploymentContext: {
-          type: "string",
-          enum: ["real_time", "batch", "assistive", "autonomous"],
-          description: "How the system operates in practice",
-        },
-      },
-      required: ["modelId", "hasHumanInTheLoop", "hasKillSwitch", "deploymentContext"],
-    },
-  },
-  {
-    name: "run_bias_assessment",
-    description:
-      "Runs a multidimensional bias assessment using Fairlearn and AIF360. " +
-      "Tests across protected attributes: race, gender, age, disability, socioeconomic status. " +
-      "🔗 EU AI Act Art. 10 | NIST AI RMF MEASURE 2.2 | ISO/IEC 42001 Clause 8.1.2 | GDPR Art. 9, 35",
-    inputSchema: {
-      type: "object",
-      properties: {
-        modelId: { type: "string", description: "Unique model identifier" },
-        datasetSample: {
-          type: "array",
-          items: { type: "object" },
-          description: "Array of data samples with labels and protected attributes for bias analysis",
-        },
-        sensitiveFeatures: {
-          type: "array",
-          items: { type: "string" },
-          description: "List of protected attributes to test (e.g. ['race', 'gender', 'age'])",
-        },
-        fairnessThreshold: {
-          type: "number",
-          description: "Disparate impact ratio threshold (default: 0.8 per 80% rule)",
-          default: 0.8,
-        },
-      },
-      required: ["modelId", "datasetSample", "sensitiveFeatures"],
-    },
-  },
-  {
-    name: "generate_dpia",
-    description:
-      "Generates a Data Protection Impact Assessment (DPIA) per GDPR Art. 35. " +
-      "Evaluates cross-border transfer mechanisms (Art. 44–49) and adequacy decisions. " +
-      "🔗 GDPR Art. 5, 9, 22, 35, 44–49 | ISO/IEC 42001 Clause 6.2",
-    inputSchema: {
-      type: "object",
-      properties: {
-        modelId: { type: "string", description: "Unique model identifier" },
-        dataController: { type: "string", description: "Name/entity of the data controller" },
-        dpoName: { type: "string", description: "Name of the Data Protection Officer" },
-        processingPurpose: { type: "string", description: "Description of the processing purpose" },
-        dataCategories: {
-          type: "array",
-          items: { type: "string" },
-          description: "Categories of personal data processed (e.g. ['biometric', 'location', 'health'])",
-        },
-        crossBorderTransfer: {
-          type: "boolean",
-          description: "Does processing involve cross-border data transfer?",
-        },
-        thirdCountries: {
-          type: "array",
-          items: { type: "string" },
-          description: "List of third countries involved in transfers",
-        },
-      },
-      required: ["modelId", "dataController", "dpoName", "processingPurpose", "dataCategories"],
-    },
-  },
-  {
-    name: "run_adversarial_tests",
-    description:
-      "Executes adversarial robustness testing: prompt injection, jailbreak attempts, OOD detection. " +
-      "🔗 EU AI Act Art. 15 | NIST AI RMF MEASURE 1.3 | ISO/IEC 42001 Clause 8.1.3",
-    inputSchema: {
-      type: "object",
-      properties: {
-        modelId: { type: "string", description: "Unique model identifier" },
-        testSuites: {
-          type: "array",
-          items: {
-            type: "string",
-            enum: ["prompt_injection", "jailbreak", "ood_detection", "model_inversion", "membership_inference"],
-          },
-          description: "Selected adversarial test suites to execute",
-        },
-        severityThreshold: {
-          type: "string",
-          enum: ["low", "medium", "high"],
-          default: "medium",
-          description: "Minimum severity to flag as failure",
-        },
-      },
-      required: ["modelId", "testSuites"],
-    },
-  },
-  {
-    name: "score_audit_weighted",
-    description:
-      "Aggregates all previous audit phases into a weighted score (0–100). " +
-      "**Halts certification** immediately if any BLOCKER FAIL is detected. " +
-      "🔗 NIST AI RMF MEASURE 4.1 | ISO/IEC 42001 Clause 9.1",
-    inputSchema: {
-      type: "object",
-      properties: {
-        modelId: { type: "string", description: "Unique model identifier" },
-        riskTier: {
-          type: "object",
-          properties: {
-            tier: { type: "string" },
-            compliant: { type: "boolean" },
-          },
-          description: "Risk classification result from classify_ai_risk",
-        },
-        supplyChain: {
-          type: "object",
-          properties: {
-            ipClearance: { type: "boolean" },
-            compliant: { type: "boolean" },
-          },
-          description: "Supply chain audit result from audit_supply_chain",
-        },
-        oversight: {
-          type: "object",
-          properties: {
-            blocker: { type: "boolean" },
-            compliant: { type: "boolean" },
-          },
-          description: "Human oversight result from verify_human_oversight",
-        },
-        bias: {
-          type: "object",
-          properties: {
-            overallBiasRisk: { type: "string" },
-            compliant: { type: "boolean" },
-          },
-          description: "Bias assessment result from run_bias_assessment",
-        },
-        dpia: {
-          type: "object",
-          properties: {
-            compliant: { type: "boolean" },
-          },
-          description: "DPIA report result from generate_dpia",
-        },
-        adversarial: {
-          type: "object",
-          properties: {
-            overallRisk: { type: "string" },
-            compliant: { type: "boolean" },
-          },
-          description: "Adversarial test result from run_adversarial_tests",
-        },
-      },
-      required: ["modelId"],
-    },
-  },
-  {
-    name: "generate_audit_certificate",
-    description:
-      "Issues a cryptographically signed W3C Verifiable Credential (VC-JSON) " +
-      "for the completed audit. Saves to PostgreSQL evidence store. " +
-      "🔗 W3C VC Data Model 1.1 | ISO/IEC 42001 Clause 7.5 (Documented Information)",
-    inputSchema: {
-      type: "object",
-      properties: {
-        modelId: { type: "string", description: "Unique model identifier" },
-        weightedScore: { type: "number", description: "Final weighted audit score (0–100)" },
-        tier: {
-          type: "string",
-          enum: ["prohibited", "high", "limited", "minimal", "certified"],
-          description: "Final risk tier or certification level",
-        },
-        compliant: { type: "boolean", description: "Overall compliance status" },
-        issuerName: { type: "string", description: "Name of the issuing authority" },
-        validDays: {
-          type: "number",
-          description: "Validity period in days (default: 365)",
-          default: 365,
-        },
-      },
-      required: ["modelId", "weightedScore", "tier", "compliant", "issuerName"],
-    },
-  },
-  {
-    name: "monitor_model_drift",
-    description:
-      "Sets up continuous post-deployment drift monitoring using Evidently AI. " +
-      "Triggers re-audit workflows if drift exceeds thresholds. " +
-      "🔗 EU AI Act Art. 15 | NIST AI RMF MEASURE 3.3 | ISO/IEC 42001 Clause 9.1 (Monitoring)",
-    inputSchema: {
-      type: "object",
-      properties: {
-        modelId: { type: "string", description: "Unique model identifier" },
-        referenceData: {
-          type: "array",
-          items: { type: "object" },
-          description: "Reference/baseline dataset for drift comparison",
-        },
-        productionData: {
-          type: "array",
-          items: { type: "object" },
-          description: "Current production data for drift evaluation",
-        },
-        driftThreshold: {
-          type: "number",
-          description: "PSI/KS threshold for drift alert (default: 0.1)",
-          default: 0.1,
-        },
-        features: {
-          type: "array",
-          items: { type: "string" },
-          description: "List of feature names to monitor for drift",
-        },
-      },
-      required: ["modelId", "referenceData", "productionData", "features"],
-    },
-  },
-  {
-    name: "audit_session_memory",
-    description:
-      "Audits short-term and long-term memory isolation for AI agents. " +
-      "Verifies session data wipe-on-expiry, context window limits, " +
-      "and cross-session data leakage prevention. " +
-      "GDPR Art. 5(1)(f) | GDPR Art. 25 | DPDP Act Sec. 8 | EU AI Act Art. 15",
-    inputSchema: {
-      type: "object",
-      properties: {
-        modelId: { type: "string", description: "Unique model identifier" },
-        sessionId: { type: "string", description: "Session identifier to audit" },
-        stmConfig: {
-          type: "object",
-          description: "Short-term memory configuration (maxTokens, maxHistory, wipeOnExpiry, isolation, etc.)",
-        },
-        ltmConfig: {
-          type: "object",
-          description: "Long-term memory configuration (optional)",
-        },
-        sessionTimeoutMinutes: {
-          type: "number",
-          description: "Session timeout in minutes (default: 30)",
-          default: 30,
-        },
-        isolationLevel: {
-          type: "string",
-          enum: ["per_user", "per_session", "shared"],
-          description: "Memory isolation level",
-          default: "per_user",
-        },
-      },
-      required: ["modelId", "sessionId", "stmConfig"],
-    },
-  },
-  {
-    name: "audit_rag_quality",
-    description:
-      "Evaluates RAG pipeline quality: retrieval accuracy, embedding bias, " +
-      "knowledge freshness, hallucination rate. Tests against sample queries " +
-      "with expected answers. " +
-      "EU AI Act Art. 15 | NIST AI RMF MEASURE 3.3 | ISO/IEC 42001 Clause 9.1",
-    inputSchema: {
-      type: "object",
-      properties: {
-        modelId: { type: "string", description: "Unique model identifier" },
-        vectorDbConfig: {
-          type: "object",
-          description: "Vector DB configuration (totalSources, freshSources, protectedGroups, biasScores)",
-        },
-        sampleQueries: {
-          type: "array",
-          items: { type: "object" },
-          description: "Sample queries with expected answers and relevance scores",
-        },
-        freshnessPolicyDays: {
-          type: "number",
-          description: "Knowledge freshness policy in days (default: 90)",
-          default: 90,
-        },
-      },
-      required: ["modelId", "vectorDbConfig", "sampleQueries"],
-    },
-  },
-  {
-    name: "audit_prompt_templates",
-    description:
-      "Audits prompt engineering templates for injection surface, few-shot bias, " +
-      "instruction safety, and transparency compliance. " +
-      "EU AI Act Art. 10, 13 | NIST AI RMF GOVERN 1.2 | ISO/IEC 42001 Clause 8.1.3",
-    inputSchema: {
-      type: "object",
-      properties: {
-        modelId: { type: "string", description: "Unique model identifier" },
-        promptTemplates: {
-          type: "array",
-          items: { type: "object" },
-          description: "Array of prompt templates to audit [{name, template, role, use_case}]",
-        },
-        fewShotExamples: {
-          type: "array",
-          items: { type: "object" },
-          description: "Few-shot examples to check for bias (optional)",
-        },
-        systemPrompt: {
-          type: "string",
-          description: "System prompt to audit (optional)",
-        },
-      },
-      required: ["modelId", "promptTemplates"],
-    },
-  },
-  {
-    name: "audit_agent_trust",
-    description:
-      "Audits multi-agent trust: identity verification, capability claims validation, " +
-      "P2P message integrity, collusion detection, and cross-agent data leakage risk. " +
-      "EU AI Act Art. 12, 14 | NIST GOVERN 1.2 | DPDP Act Sec. 8 | ISO/IEC 42001 Clause 7.4.3",
-    inputSchema: {
-      type: "object",
-      properties: {
-        modelId: { type: "string", description: "Unique model identifier" },
-        agents: {
-          type: "array",
-          items: { type: "object" },
-          description: "Array of agent configs [{agentId, role, capabilities, tools, hasIdentity, hasSignature}]",
-        },
-        messageBusConfig: {
-          type: "object",
-          description: "Message bus configuration (hmac, signing, authentication)",
-        },
-        p2pEnabled: {
-          type: "boolean",
-          description: "Whether peer-to-peer agent communication is enabled",
-          default: false,
-        },
-      },
-      required: ["modelId", "agents"],
-    },
-  },
-  {
-    name: "audit_tool_permissions",
-    description:
-      "Audits tool permission boundaries: verifies agents only access authorized tools, " +
-      "detects privilege escalation, unauthorized access, and permission drift. " +
-      "DPDP Act Sec. 8 | EU AI Act Art. 14 | GDPR Art. 25 | ISO/IEC 42001 Clause 7.4.3",
-    inputSchema: {
-      type: "object",
-      properties: {
-        modelId: { type: "string", description: "Unique model identifier" },
-        toolRegistry: {
-          type: "array",
-          items: { type: "object" },
-          description: "Tool registry [{toolName, permissions, agents, scopes, lastAuditedPermissions}]",
-        },
-        accessLogs: {
-          type: "array",
-          items: { type: "object" },
-          description: "Access logs [{timestamp, agentId, toolName, action, result, scope}]",
-        },
-      },
-      required: ["modelId", "toolRegistry", "accessLogs"],
-    },
-  },
-  {
-    name: "classify_agent_autonomy",
-    description:
-      "Classifies AI agent autonomy level (assistive/supervised/autonomous/fully_autonomous) " +
-      "and maps to EU AI Act risk tiers. Determines required human oversight controls. " +
-      "EU AI Act Art. 6, 14 | NIST AI RMF GOVERN 3.2 | ISO/IEC 42001 Clause 6.1",
-    inputSchema: {
-      type: "object",
-      properties: {
-        modelId: { type: "string", description: "Unique model identifier" },
-        agentType: {
-          type: "string",
-          enum: ["single", "multi_agent", "hierarchical", "swarm"],
-          description: "Type of agent architecture",
-        },
-        hasHumanOversight: { type: "boolean", description: "Does the agent have human oversight?" },
-        canMakeDecisions: { type: "boolean", description: "Can the agent make autonomous decisions?" },
-        canModifyEnvironment: { type: "boolean", description: "Can the agent modify its environment?" },
-        canDelegateTasks: { type: "boolean", description: "Can the agent delegate tasks to other agents?" },
-        canAccessExternalAPIs: { type: "boolean", description: "Can the agent access external APIs?" },
-        canSelfModify: { type: "boolean", description: "Can the agent modify its own prompts/weights?" },
-        deploymentContext: {
-          type: "string",
-          enum: ["real_time", "batch", "assistive", "autonomous"],
-          description: "Deployment context",
-          default: "assistive",
-        },
-      },
-      required: ["modelId", "agentType", "hasHumanOversight", "canMakeDecisions"],
-    },
+    uri: "compliance://frameworks/dpdp-act",
+    name: "India DPDP Act 2023",
+    description: "Digital Personal Data Protection Act. Covers Sec. 5/6 (consent), Sec. 8 (fiduciary duties), Sec. 11–14 (data principal rights including right of erasure and grievance redressal).",
+    mimeType: "application/json",
   },
 ];
 
-// ─── Handler: List Available Tools ───────────────────────────────
+// ═══════════════════════════════════════════════════════════════════
+//  MCP PROMPTS — Guided compliance workflows
+// ═══════════════════════════════════════════════════════════════════
+
+const PROMPTS = [
+  {
+    name: "full-model-audit",
+    description: "Run a complete 17-phase compliance audit on an AI model across all five regulatory frameworks",
+    arguments: [
+      { name: "modelId", description: "Unique model identifier to audit", required: true },
+      { name: "modelType", description: "EU AI Act model category (e.g. 'employment', 'credit', 'law_enforcement')", required: true },
+      { name: "sector", description: "Deployment sector (e.g. 'healthcare', 'finance')", required: true },
+      { name: "dataController", description: "Data controller name for GDPR DPIA", required: true },
+      { name: "dpoName", description: "Data Protection Officer name", required: true },
+    ],
+  },
+  {
+    name: "dpdp-quick-check",
+    description: "Quick India DPDP Act 2023 compliance assessment for a model and its data fiduciary",
+    arguments: [
+      { name: "modelId", description: "Model identifier to assess", required: true },
+      { name: "dataFiduciary", description: "Name of the Data Fiduciary under DPDP Act", required: true },
+    ],
+  },
+  {
+    name: "agent-trust-audit",
+    description: "Audit multi-agent system trust boundaries, tool permissions, and autonomy classification",
+    arguments: [
+      { name: "modelId", description: "Model/agent system identifier", required: true },
+      { name: "agentCount", description: "Number of agents in the system", required: true },
+      { name: "hasHumanOversight", description: "Whether human oversight is in place", required: true },
+    ],
+  },
+  {
+    name: "risk-classify-only",
+    description: "Classify a model's EU AI Act risk tier without running the full audit pipeline",
+    arguments: [
+      { name: "modelId", description: "Model identifier", required: true },
+      { name: "modelType", description: "EU AI Act model category", required: true },
+      { name: "sector", description: "Deployment sector", required: true },
+    ],
+  },
+];
+
+// ═══════════════════════════════════════════════════════════════════
+//  HANDLER: List Available Tools
+// ═══════════════════════════════════════════════════════════════════
 
 server.setRequestHandler(ListToolsRequestSchema, async () => ({
   tools: TOOLS.map(({ name, description, inputSchema }) => ({
@@ -565,43 +241,337 @@ server.setRequestHandler(ListToolsRequestSchema, async () => ({
   })),
 }));
 
-// ─── Handler: Call Tool ──────────────────────────────────────────
+// ═══════════════════════════════════════════════════════════════════
+//  HANDLER: List Available Resources
+// ═══════════════════════════════════════════════════════════════════
 
-server.setRequestHandler(CallToolRequestSchema, async (request) => {
+server.setRequestHandler(ListResourcesRequestSchema, async () => ({
+  resources: RESOURCES.map(({ uri, name, description, mimeType }) => ({
+    uri,
+    name,
+    description,
+    mimeType,
+  })),
+}));
+
+// ═══════════════════════════════════════════════════════════════════
+//  HANDLER: Read Resource Content
+// ═══════════════════════════════════════════════════════════════════
+
+server.setRequestHandler(ReadResourceRequestSchema, async (request) => {
+  const { uri } = request.params;
+
+  const resourceData: Record<string, object> = {
+    "compliance://frameworks/eu-ai-act": {
+      framework: "EU AI Act (Regulation 2024/1689)",
+      status: "In force since August 1, 2024",
+      riskTiers: ["Unacceptable Risk (Art. 5)", "High Risk (Art. 6, Annex III)", "Limited Risk (Art. 50)", "Minimal Risk"],
+      keyArticles: {
+        "Art. 5": "Prohibited AI practices (social scoring, real-time biometric surveillance)",
+        "Art. 6": "High-risk AI system classification criteria",
+        "Art. 10": "Data governance requirements for training data",
+        "Art. 12": "Record-keeping and technical documentation",
+        "Art. 14": "Human oversight requirements for high-risk systems",
+        "Art. 15": "Accuracy, robustness, and cybersecurity requirements",
+        "Art. 50": "Transparency obligations for limited-risk systems",
+        "Annex III": "High-risk use cases (employment, credit, law enforcement, etc.)",
+      },
+      complianceTools: ["classify_ai_risk", "discover_supply_chain", "audit_supply_chain", "verify_human_oversight", "run_bias_assessment", "run_adversarial_tests"],
+    },
+    "compliance://frameworks/gdpr": {
+      framework: "GDPR (Regulation 2016/679)",
+      status: "In force since May 25, 2018",
+      keyArticles: {
+        "Art. 5": "Principles of processing (lawfulness, fairness, transparency, purpose limitation, data minimisation, accuracy, storage limitation, integrity/confidentiality, accountability)",
+        "Art. 9": "Processing of special categories of personal data",
+        "Art. 22": "Automated individual decision-making, including profiling",
+        "Art. 25": "Data protection by design and by default",
+        "Art. 30": "Records of processing activities (ROPA)",
+        "Art. 35": "Data Protection Impact Assessment (DPIA)",
+        "Art. 44–49": "Transfers of personal data to third countries",
+      },
+      complianceTools: ["generate_dpia", "run_bias_assessment", "audit_session_memory", "generate_audit_certificate"],
+    },
+    "compliance://frameworks/nist-ai-rmf": {
+      framework: "NIST AI Risk Management Framework (AI 100-1)",
+      status: "Published January 2023",
+      functions: {
+        "GOVERN": "Establish and maintain AI risk management culture (GOVERN 1.2, 3.2)",
+        "MAP": "Context and risk identification (MAP 1.1)",
+        "MEASURE": "Analyze, assess, and quantify AI risk (MEASURE 1.3, 2.2, 3.3, 4.1)",
+        "MANAGE": "Allocate resources and manage risk based on assessment",
+      },
+      complianceTools: ["classify_ai_risk", "audit_supply_chain", "run_bias_assessment", "monitor_model_drift", "score_audit_weighted"],
+    },
+    "compliance://frameworks/iso-42001": {
+      framework: "ISO/IEC 42001:2023 — AI Management System",
+      status: "Published December 2023",
+      keyClauses: {
+        "6.1": "Actions to address risks and opportunities",
+        "6.2": "AI management system objectives and planning",
+        "7.4.3": "Information, documentation, and supply chain",
+        "7.5": "Documented information (evidence retention requirements)",
+        "8.1.2": "AI system impact assessment",
+        "8.1.3": "AI system development and operations",
+        "8.2": "Risk assessment",
+        "9.1": "Monitoring, measurement, analysis, and evaluation",
+      },
+      complianceTools: ["generate_audit_certificate", "score_audit_weighted", "monitor_model_drift"],
+    },
+    "compliance://frameworks/dpdp-act": {
+      framework: "India Digital Personal Data Protection Act 2023",
+      status: "Enacted August 11, 2023; rules being notified",
+      keySections: {
+        "Sec. 5": "Notice and consent requirements for data processing",
+        "Sec. 6": "Lawful basis for processing (consent or legitimate uses)",
+        "Sec. 8": "Obligations of Data Fiduciaries (purpose limitation, security safeguards)",
+        "Sec. 11": "Right of Data Principals to access information",
+        "Sec. 12": "Right to correction and erasure",
+        "Sec. 13": "Right to grievance redressal",
+        "Sec. 14": "Right to nominate",
+      },
+      complianceTools: ["assess_dpdp_compliance"],
+    },
+  };
+
+  const data = resourceData[uri];
+  if (!data) {
+    return mcpError(ErrorCode.InvalidRequest, `Unknown resource URI: ${uri}`);
+  }
+
+  return formatResource(uri, "application/json", JSON.stringify(data, null, 2));
+});
+
+// ═══════════════════════════════════════════════════════════════════
+//  HANDLER: List Available Prompts
+// ═══════════════════════════════════════════════════════════════════
+
+server.setRequestHandler(ListPromptsRequestSchema, async () => ({
+  prompts: PROMPTS.map(({ name, description, arguments: args }) => ({
+    name,
+    description,
+    arguments: args,
+  })),
+}));
+
+// ═══════════════════════════════════════════════════════════════════
+//  HANDLER: Get Prompt Content
+// ═══════════════════════════════════════════════════════════════════
+
+server.setRequestHandler(GetPromptRequestSchema, async (request) => {
   const { name, arguments: args } = request.params;
 
+  switch (name) {
+    case "full-model-audit": {
+      const modelId = args?.modelId || "unknown-model";
+      const modelType = args?.modelType || "general_purpose_ai";
+      const sector = args?.sector || "other";
+      const dataController = args?.dataController || "Unknown Controller";
+      const dpoName = args?.dpoName || "Unknown DPO";
+
+      return {
+        description: `Complete 17-phase compliance audit for model "${modelId}"`,
+        messages: [
+          {
+            role: "user",
+            content: {
+              type: "text",
+              text:
+                `I need to run a full compliance audit on model "${modelId}". ` +
+                `Please execute the following steps in order:\n\n` +
+                `1. classify_ai_risk — Model type: ${modelType}, Sector: ${sector}\n` +
+                `2. discover_supply_chain — Auto-discover model artifacts\n` +
+                `3. audit_supply_chain — Verify data lineage and IP clearance\n` +
+                `4. verify_human_oversight — Check HITL and kill-switch controls\n` +
+                `5. run_bias_assessment — Test protected attributes for fairness\n` +
+                `6. generate_dpia — DPIA for ${dataController}, DPO: ${dpoName}\n` +
+                `7. run_adversarial_tests — Test prompt injection, jailbreak, OOD\n` +
+                `8. score_audit_weighted — Aggregate all phases\n` +
+                `9. generate_audit_certificate — Issue W3C VC if compliant\n\n` +
+                `For each phase, use the corresponding ComplianceStack MCP tool. ` +
+                `Report BLOCKER FAILs immediately. Provide regulatory article references for all findings.`,
+            },
+          },
+        ],
+      };
+    }
+
+    case "dpdp-quick-check": {
+      const modelId = args?.modelId || "unknown-model";
+      const dataFiduciary = args?.dataFiduciary || "Unknown Fiduciary";
+
+      return {
+        description: `Quick DPDP Act compliance check for model "${modelId}"`,
+        messages: [
+          {
+            role: "user",
+            content: {
+              type: "text",
+              text:
+                `Assess the India DPDP Act 2023 compliance for model "${modelId}". ` +
+                `Data Fiduciary: ${dataFiduciary}. ` +
+                `Use the assess_dpdp_compliance tool and evaluate: ` +
+                `consent mechanisms (Sec. 5/6), fiduciary duties (Sec. 8), ` +
+                `data principal rights (Sec. 11–14). ` +
+                `Provide section-by-section findings with remediation steps.`,
+            },
+          },
+        ],
+      };
+    }
+
+    case "agent-trust-audit": {
+      const modelId = args?.modelId || "unknown-model";
+      const agentCount = args?.agentCount || "2";
+      const hasHumanOversight = args?.hasHumanOversight || "false";
+
+      return {
+        description: `Multi-agent trust audit for system "${modelId}"`,
+        messages: [
+          {
+            role: "user",
+            content: {
+              type: "text",
+              text:
+                `Audit the multi-agent trust system "${modelId}" with ${agentCount} agents. ` +
+                `Human oversight: ${hasHumanOversight}. ` +
+                `Execute these tools in sequence:\n` +
+                `1. audit_agent_trust — Verify agent identities and message integrity\n` +
+                `2. audit_tool_permissions — Check permission boundaries and privilege escalation\n` +
+                `3. classify_agent_autonomy — Determine autonomy level and required controls\n\n` +
+                `Report any BLOCKER FAILs (e.g., fully autonomous without oversight). ` +
+                `Map findings to EU AI Act Art. 12/14 and ISO/IEC 42001 Clause 7.4.3.`,
+            },
+          },
+        ],
+      };
+    }
+
+    case "risk-classify-only": {
+      const modelId = args?.modelId || "unknown-model";
+      const modelType = args?.modelType || "general_purpose_ai";
+      const sector = args?.sector || "other";
+
+      return {
+        description: `Quick EU AI Act risk classification for model "${modelId}"`,
+        messages: [
+          {
+            role: "user",
+            content: {
+              type: "text",
+              text:
+                `Classify model "${modelId}" under the EU AI Act risk framework. ` +
+                `Model type: ${modelType}. Sector: ${sector}. ` +
+                `Use the classify_ai_risk tool and provide the risk tier with rationale ` +
+                `and regulatory article references (Art. 6, Annex I–III).`,
+            },
+          },
+        ],
+      };
+    }
+
+    default:
+      return mcpError(ErrorCode.InvalidRequest, `Unknown prompt: ${name}`);
+  }
+});
+
+// ═══════════════════════════════════════════════════════════════════
+//  HANDLER: Cancelled Notification (MCP spec §notifications/cancelled)
+// ═══════════════════════════════════════════════════════════════════
+
+server.setRequestHandler(CancelledNotificationSchema, async (notification) => {
+  const { requestId, reason } = notification.params;
+  cancelledRequests.add(requestId);
+  console.error(
+    `[ComplianceStack MCP] Request ${requestId} cancelled: ${reason || "no reason provided"}`
+  );
+});
+
+// ═══════════════════════════════════════════════════════════════════
+//  HANDLER: Call Tool (with progress tokens, cancellation, errors)
+// ═══════════════════════════════════════════════════════════════════
+
+server.setRequestHandler(CallToolRequestSchema, async (request, extra) => {
+  const { name, arguments: args } = request.params;
+  const requestId = request.id;
+  const _meta = (request.params as Record<string, unknown>)._meta as
+    | { progressToken?: string | number }
+    | undefined;
+  const progressToken = _meta?.progressToken;
+
+  // Check if request was cancelled
+  if (isCancelled(requestId)) {
+    cancelledRequests.delete(requestId);
+    return mcpError(ErrorCode.RequestCancelled, "Request was cancelled by the client");
+  }
+
   if (!args) {
-    return {
-      content: [{ type: "text", text: "Error: No arguments provided." }],
-      isError: true,
-    };
+    return mcpError(ErrorCode.InvalidParams, "No arguments provided. All tools require at least a modelId parameter.");
+  }
+
+  // Validate modelId is present and non-empty for all tools
+  if (typeof args.modelId !== "string" || args.modelId.trim().length === 0) {
+    return mcpError(ErrorCode.InvalidParams, "The 'modelId' parameter is required and must be a non-empty string.");
+  }
+
+  // Validate modelId format
+  if (!/^[a-zA-Z0-9][a-zA-Z0-9._-]*$/.test(args.modelId as string)) {
+    return mcpError(
+      ErrorCode.InvalidParams,
+      "The 'modelId' must start with an alphanumeric character and contain only letters, numbers, dots, hyphens, or underscores.",
+    );
+  }
+
+  // MCP-layer input validation against JSON Schema
+  const validation = validateToolInput(name, args as Record<string, unknown>);
+  if (!validation.valid) {
+    const errorMessages = validation.errors?.map((e) => `${e.instancePath || "/"} ${e.message}`).join("; ");
+    return mcpError(
+      ErrorCode.InvalidParams,
+      `Input validation failed for tool '${name}': ${errorMessages}`,
+    );
   }
 
   try {
+    // Send initial progress
+    await sendProgress(
+      extra?.sendNotification?.bind(extra) || (async () => {}),
+      progressToken,
+      0,
+      100,
+      `Starting ${name}...`,
+    );
+
     switch (name) {
-      // ── Tool 0: assess_dpdp_compliance ─────────────────────────
-      case "assess_dpdp_compliance": {
-        const result = await callPythonBackend<DPDPComplianceReport>("/api/dpdp/assess", {
-          body: args,
-        });
-        return formatSuccess(result, "India DPDP Act 2023 Compliance Report");
-      }
-
-      // ── Tool 1: discover_supply_chain ──────────────────────────
-      case "discover_supply_chain": {
-        const result = await callPythonBackend("/api/supply-chain/discover", {
-          body: args,
-          timeout: 120000,  // Discovery may take longer
-        });
-        return formatSuccess(result, "Supply Chain Discovery");
-      }
-
-      // ── Tool 2: classify_ai_risk ───────────────────────────────
+      // ── Tool 1: classify_ai_risk ───────────────────────────────
       case "classify_ai_risk": {
         const result = await callPythonBackend<RiskTierResult>("/api/risk/classify", {
           body: args,
         });
+        await sendProgress(
+          extra?.sendNotification?.bind(extra) || (async () => {}),
+          progressToken,
+          100,
+          100,
+          "Risk classification complete",
+        );
         return formatSuccess(result, "Risk Classification");
+      }
+
+      // ── Tool 2: discover_supply_chain ──────────────────────────
+      case "discover_supply_chain": {
+        const result = await callPythonBackend<DiscoveryResult>("/api/supply-chain/discover", {
+          body: args,
+          timeout: 120000,
+        });
+        await sendProgress(
+          extra?.sendNotification?.bind(extra) || (async () => {}),
+          progressToken,
+          100,
+          100,
+          "Supply chain discovery complete",
+        );
+        return formatSuccess(result, "Supply Chain Discovery");
       }
 
       // ── Tool 3: audit_supply_chain ─────────────────────────────
@@ -609,6 +579,13 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
         const result = await callPythonBackend<ProvenanceReport>("/api/supply-chain/audit", {
           body: args,
         });
+        await sendProgress(
+          extra?.sendNotification?.bind(extra) || (async () => {}),
+          progressToken,
+          100,
+          100,
+          "Supply chain audit complete",
+        );
         return formatSuccess(result, "Supply Chain Audit");
       }
 
@@ -618,23 +595,30 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
           "/api/human-oversight/verify",
           { body: args },
         );
-        // BLOCKER FAIL — immediately return a strict failure if blocker is true
+        await sendProgress(
+          extra?.sendNotification?.bind(extra) || (async () => {}),
+          progressToken,
+          100,
+          100,
+          "Human oversight verification complete",
+        );
         if (result.blocker) {
           return {
             content: [
               {
-                type: "text",
-                text: JSON.stringify(result, null, 2),
+                type: "text" as const,
+                text: `📋 Human Oversight Verification Result:\n\`\`\`json\n${JSON.stringify(result, null, 2)}\n\`\`\``,
               },
               {
-                type: "text",
-                text: "❌ BLOCKER FAIL: Human oversight mechanisms are insufficient. " +
-                  "Certification cannot proceed. "
-                  + "EU AI Act Art. 14 requires HITL/HOTL controls. "
-                  + `Remediation: ${result.remediation || "Implement kill-switch and human review process."}`
+                type: "text" as const,
+                text:
+                  "❌ BLOCKER FAIL: Human oversight mechanisms are insufficient. " +
+                  "Certification cannot proceed. " +
+                  "EU AI Act Art. 14 requires HITL/HOTL controls for high-risk AI systems. " +
+                  `Remediation: ${result.remediation || "Implement kill-switch and human review process."}`,
               },
             ],
-            isError: true,
+            isError: true as const,
           };
         }
         return formatSuccess(result, "Human Oversight Verification");
@@ -645,6 +629,13 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
         const result = await callPythonBackend<BiasReport>("/api/bias/assess", {
           body: args,
         });
+        await sendProgress(
+          extra?.sendNotification?.bind(extra) || (async () => {}),
+          progressToken,
+          100,
+          100,
+          "Bias assessment complete",
+        );
         return formatSuccess(result, "Bias Assessment");
       }
 
@@ -653,6 +644,13 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
         const result = await callPythonBackend<DPIAReport>("/api/dpia/generate", {
           body: args,
         });
+        await sendProgress(
+          extra?.sendNotification?.bind(extra) || (async () => {}),
+          progressToken,
+          100,
+          100,
+          "DPIA generation complete",
+        );
         return formatSuccess(result, "DPIA Report");
       }
 
@@ -660,7 +658,14 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
       case "run_adversarial_tests": {
         const result = await callPythonBackend<AdversarialReport>(
           "/api/adversarial/run",
-          { body: args },
+          { body: args, timeout: 180000 },
+        );
+        await sendProgress(
+          extra?.sendNotification?.bind(extra) || (async () => {}),
+          progressToken,
+          100,
+          100,
+          "Adversarial testing complete",
         );
         return formatSuccess(result, "Adversarial Test Report");
       }
@@ -671,20 +676,30 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
           "/api/scoring/weighted",
           { body: args },
         );
-        // Halt certification if blocker failures exist
+        await sendProgress(
+          extra?.sendNotification?.bind(extra) || (async () => {}),
+          progressToken,
+          100,
+          100,
+          "Weighted scoring complete",
+        );
         if (result.blockerFailures.length > 0) {
           return {
             content: [
               {
-                type: "text",
-                text: JSON.stringify(result, null, 2),
+                type: "text" as const,
+                text: `📋 Weighted Audit Score Result:\n\`\`\`json\n${JSON.stringify(result, null, 2)}\n\`\`\``,
               },
               {
-                type: "text",
-                text: `🛑 CERTIFICATION HALTED: ${result.blockerFailures.length} blocker failure(s) detected.\nBlocker(s): ${result.blockerFailures.join(", ")}\nResolution required before certification can proceed.`,
+                type: "text" as const,
+                text:
+                  `🛑 CERTIFICATION HALTED: ${result.blockerFailures.length} blocker failure(s) detected.\n` +
+                  `Blocker(s): ${result.blockerFailures.join(", ")}\n` +
+                  `Resolution required before certification can proceed. ` +
+                  `Refer to the specific tool outputs above for remediation guidance.`,
               },
             ],
-            isError: true,
+            isError: true as const,
           };
         }
         return formatSuccess(result, "Weighted Audit Score");
@@ -696,6 +711,13 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
           "/api/certificate/generate",
           { body: args, timeout: 120000 },
         );
+        await sendProgress(
+          extra?.sendNotification?.bind(extra) || (async () => {}),
+          progressToken,
+          100,
+          100,
+          "Certificate generation complete",
+        );
         return formatSuccess(result, "Audit Certificate (W3C VC-JSON)");
       }
 
@@ -703,7 +725,15 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
       case "monitor_model_drift": {
         const result = await callPythonBackend<DriftReport>("/api/drift/monitor", {
           body: args,
+          timeout: 120000,
         });
+        await sendProgress(
+          extra?.sendNotification?.bind(extra) || (async () => {}),
+          progressToken,
+          100,
+          100,
+          "Drift monitoring setup complete",
+        );
         return formatSuccess(result, "Model Drift Report");
       }
 
@@ -712,6 +742,13 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
         const result = await callPythonBackend<SessionMemoryReport>(
           "/api/session-memory/audit",
           { body: args },
+        );
+        await sendProgress(
+          extra?.sendNotification?.bind(extra) || (async () => {}),
+          progressToken,
+          100,
+          100,
+          "Session memory audit complete",
         );
         return formatSuccess(result, "Session Memory Audit");
       }
@@ -722,6 +759,13 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
           "/api/rag-quality/evaluate",
           { body: args },
         );
+        await sendProgress(
+          extra?.sendNotification?.bind(extra) || (async () => {}),
+          progressToken,
+          100,
+          100,
+          "RAG quality evaluation complete",
+        );
         return formatSuccess(result, "RAG Quality Report");
       }
 
@@ -730,6 +774,13 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
         const result = await callPythonBackend<PromptAuditReport>(
           "/api/prompt-audit/evaluate",
           { body: args },
+        );
+        await sendProgress(
+          extra?.sendNotification?.bind(extra) || (async () => {}),
+          progressToken,
+          100,
+          100,
+          "Prompt template audit complete",
         );
         return formatSuccess(result, "Prompt Template Audit");
       }
@@ -740,6 +791,13 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
           "/api/agent-trust/evaluate",
           { body: args },
         );
+        await sendProgress(
+          extra?.sendNotification?.bind(extra) || (async () => {}),
+          progressToken,
+          100,
+          100,
+          "Agent trust audit complete",
+        );
         return formatSuccess(result, "Agent Trust Audit");
       }
 
@@ -748,6 +806,13 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
         const result = await callPythonBackend<ToolPermissionReport>(
           "/api/tool-permissions/evaluate",
           { body: args },
+        );
+        await sendProgress(
+          extra?.sendNotification?.bind(extra) || (async () => {}),
+          progressToken,
+          100,
+          100,
+          "Tool permission audit complete",
         );
         return formatSuccess(result, "Tool Permission Audit");
       }
@@ -758,68 +823,102 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
           "/api/agent-autonomy/classify",
           { body: args },
         );
-        // BLOCKER FAIL for fully autonomous agents
+        await sendProgress(
+          extra?.sendNotification?.bind(extra) || (async () => {}),
+          progressToken,
+          100,
+          100,
+          "Agent autonomy classification complete",
+        );
         if (result.autonomyLevel === "fully_autonomous") {
           return {
             content: [
               {
-                type: "text",
-                text: JSON.stringify(result, null, 2),
+                type: "text" as const,
+                text: `📋 Agent Autonomy Classification Result:\n\`\`\`json\n${JSON.stringify(result, null, 2)}\n\`\`\``,
               },
               {
-                type: "text",
-                text: "BLOCKER FAIL: Fully autonomous agent detected. " +
-                  "EU AI Act Art. 14 requires human oversight for high-risk AI. " +
-                  "Autonomous operation without oversight is BLOCKED. " +
-                  "Implement human-in-the-loop controls before deployment.",
+                type: "text" as const,
+                text:
+                  "❌ BLOCKER FAIL: Fully autonomous agent detected. " +
+                  "EU AI Act Art. 14 requires human oversight for high-risk AI systems. " +
+                  "Autonomous operation without human oversight is PROHIBITED. " +
+                  "Implement human-in-the-loop controls before deployment. " +
+                  "See recommended controls in the result above.",
               },
             ],
-            isError: true,
+            isError: true as const,
           };
         }
         return formatSuccess(result, "Agent Autonomy Classification");
       }
 
+      // ── Tool 17: assess_dpdp_compliance ──────────────────────
+      case "assess_dpdp_compliance": {
+        const result = await callPythonBackend<DPDPComplianceReport>("/api/dpdp/assess", {
+          body: args,
+        });
+        await sendProgress(
+          extra?.sendNotification?.bind(extra) || (async () => {}),
+          progressToken,
+          100,
+          100,
+          "DPDP compliance assessment complete",
+        );
+        return formatSuccess(result, "India DPDP Act 2023 Compliance Report");
+      }
+
       default:
-        return {
-          content: [{ type: "text", text: `Unknown tool: ${name}` }],
-          isError: true,
-        };
+        return mcpError(
+          ErrorCode.MethodNotFound,
+          `Unknown tool: "${name}". Use ListTools to see available tools.`,
+          { availableTools: TOOLS.map((t) => t.name) },
+        );
     }
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);
-    return {
-      content: [
-        {
-          type: "text",
-          text: `Error executing ${name}: ${message}`,
-        },
-      ],
-      isError: true,
-    };
+
+    // Map HTTP errors to MCP error codes
+    if (message.includes("Authentication failed (401)")) {
+      return mcpError(ErrorCode.InternalError, `Authentication error: ${message}`);
+    }
+    if (message.includes("Authorization failed (403)")) {
+      return mcpError(ErrorCode.InternalError, `Authorization error: ${message}`);
+    }
+    if (message.includes("timed out")) {
+      return mcpError(ErrorCode.InternalError, `Timeout: ${message}`);
+    }
+    if (message.includes("Python backend error (422)")) {
+      return mcpError(ErrorCode.InvalidParams, `Validation error from backend: ${message}`);
+    }
+    if (message.includes("Python backend error (5")) {
+      return mcpError(ErrorCode.InternalError, `Backend server error: ${message}`);
+    }
+
+    return mcpError(ErrorCode.InternalError, `Error executing tool "${name}": ${message}`);
   }
 });
 
-// ─── Start MCP Server ────────────────────────────────────────────
-// Supports both stdio (Claude Desktop) and SSE (web/API) transports.
+// ═══════════════════════════════════════════════════════════════════
+//  TRANSPORT: Start MCP Server
+// ═══════════════════════════════════════════════════════════════════
 
 async function main() {
   const transportType = process.env.MCP_TRANSPORT || "stdio";
 
   if (transportType === "sse") {
-    // SSE Transport: used for web-based MCP clients
-    const express = (await import("express")).default;
+    // ── SSE Transport ────────────────────────────────────────────
     const app = express();
     app.use(express.json());
     const transports: Map<string, SSEServerTransport> = new Map();
 
-    // Health check for Docker orchestration
     app.get("/health", (_req, res) => {
       res.json({
         status: "ok",
         transport: "sse",
         sessionCount: transports.size,
-        version: "2.0.0",
+        version: SERVER_VERSION,
+        capabilities: ["tools", "resources", "prompts"],
       });
     });
 
@@ -837,7 +936,11 @@ async function main() {
       if (transport) {
         await transport.handlePostMessage(req, res);
       } else {
-        res.status(404).json({ error: "Session not found" });
+        res.status(404).json({
+          jsonrpc: "2.0",
+          error: { code: -32001, message: "Session not found" },
+          id: null,
+        });
       }
     });
 
@@ -845,15 +948,137 @@ async function main() {
     app.listen(port, () => {
       console.error(`[ComplianceStack MCP] SSE transport listening on port ${port}`);
     });
+  } else if (transportType === "streamable-http") {
+    // ── Streamable HTTP Transport (True MCP Implementation) ─────
+    // Uses custom StreamableHTTPTransport that implements the MCP
+    // Transport interface directly, rather than wrapping SSEServerTransport.
+    //
+    // Protocol:
+    //   POST /mcp   — JSON-RPC messages (application/json or x-ndjson)
+    //   GET  /mcp   — SSE stream for server-initiated messages
+    //   DELETE /mcp — Session termination
+    import("./streamable-http-transport.js").then(
+      ({ StreamableHTTPSessionManager }) => {
+        const app = express();
+        app.use(express.json({ limit: "10mb" }));
+        const sessionManager = new StreamableHTTPSessionManager();
+        sessionManager.startCleanup();
+
+        app.get("/health", (_req, res) => {
+          res.json({
+            status: "ok",
+            transport: "streamable-http",
+            sessionCount: sessionManager.sessionCount,
+            version: SERVER_VERSION,
+            capabilities: ["tools", "resources", "prompts"],
+            mcpEndpoint: "/mcp",
+          });
+        });
+
+        // POST /mcp — Main MCP endpoint
+        app.post("/mcp", async (req, res) => {
+          const sessionId = req.headers["mcp-session-id"] as string | undefined;
+
+          if (!sessionId) {
+            // Create new session
+            const session = sessionManager.createSession();
+            const transport = session.transport;
+            transport.onmessage = (msg) => server.emit("message", msg);
+            await server.connect(transport);
+
+            res.setHeader("mcp-session-id", session.id);
+            res.on("close", () => {
+              sessionManager.terminateSession(session.id);
+            });
+
+            await transport.handlePostMessage(req, res);
+            console.error(`[ComplianceStack MCP] New session: ${session.id}`);
+            return;
+          }
+
+          // Route to existing session
+          const session = sessionManager.getSession(sessionId);
+          if (!session) {
+            res.status(404).json({
+              jsonrpc: "2.0",
+              error: { code: -32001, message: `Session not found: ${sessionId}` },
+              id: null,
+            });
+            return;
+          }
+
+          await session.transport.handlePostMessage(req, res);
+        });
+
+        // GET /mcp — SSE stream for server-initiated messages
+        app.get("/mcp", async (req, res) => {
+          const sessionId = req.headers["mcp-session-id"] as string | undefined;
+          if (!sessionId) {
+            res.status(400).json({ error: "mcp-session-id header required" });
+            return;
+          }
+
+          const session = sessionManager.getSession(sessionId);
+          if (!session) {
+            res.status(404).json({ error: "Session not found" });
+            return;
+          }
+
+          res.writeHead(200, {
+            "Content-Type": "text/event-stream",
+            "Cache-Control": "no-cache",
+            Connection: "keep-alive",
+            "X-Accel-Buffering": "no",
+          });
+
+          res.write(`event: connected\ndata: ${JSON.stringify({ sessionId })}\n\n`);
+
+          session.transport.attachSSE(res);
+
+          const heartbeat = setInterval(() => {
+            try {
+              res.write(`:heartbeat\n\n`);
+            } catch {
+              clearInterval(heartbeat);
+            }
+          }, 30000);
+
+          res.on("close", () => {
+            clearInterval(heartbeat);
+            console.error(`[ComplianceStack MCP] SSE closed for ${sessionId}`);
+          });
+        });
+
+        // DELETE /mcp — Session termination
+        app.delete("/mcp", async (req, res) => {
+          const sessionId = req.headers["mcp-session-id"] as string | undefined;
+          if (sessionId) {
+            const terminated = await sessionManager.terminateSession(sessionId);
+            if (terminated) {
+              res.status(200).json({ ok: true });
+            } else {
+              res.status(404).json({ error: "Session not found" });
+            }
+          } else {
+            res.status(400).json({ error: "mcp-session-id header required" });
+          }
+        });
+
+        const port = parseInt(process.env.PORT || "3000", 10);
+        app.listen(port, () => {
+          console.error(`[ComplianceStack MCP] Streamable HTTP transport on port ${port}`);
+        });
+      }
+    );
   } else {
-    // Stdio Transport: used for Claude Desktop and direct CLI integration
+    // ── Stdio Transport ──────────────────────────────────────────
     const transport = new StdioServerTransport();
-    console.error("[ComplianceStack MCP] Starting with stdio transport...");
+    console.error(`[ComplianceStack MCP] Starting with stdio transport (v${SERVER_VERSION})...`);
     await server.connect(transport);
   }
 }
 
 main().catch((error) => {
-  console.error("[ComplianceStack MCP] Fatal error:", error);
+  console.error(`[ComplianceStack MCP] Fatal error:`, error);
   process.exit(1);
 });

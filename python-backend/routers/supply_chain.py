@@ -20,7 +20,7 @@ from models.schemas import (
     RiskLevel,
     SupplyChainNodeType,
 )
-from services.evidence_store import record_audit_evidence
+from services.evidence_store import record_audit_evidence, log_audit_event
 from services.data_discovery import populate_provenance_graph
 from services.auth import Scope, require_scope
 from db.neo4j_client import neo4j_client
@@ -50,8 +50,42 @@ async def discover_supply_chain(request: DiscoveryRequest, request_obj: Request)
             model_search_paths=request.modelSearchPaths or None,
             data_search_paths=request.dataSearchPaths or None,
         )
+
+        # Add regulatory mappings to discovery result
+        result["mappedArticles"] = [
+            "EU AI Act Art. 10 (Data Governance)",
+            "EU AI Act Art. 12 (Technical Documentation)",
+            "ISO/IEC 42001:2023 Clause 7.4.3 (Supply Chain Traceability)",
+            "NIST AI RMF MAP 2.2 (Data Provenance)",
+            "GDPR Art. 5(1)(d) (Accuracy of Data)",
+            "DPDP Act 2023 Sec. 7 (Duties of Data Fiduciary)",
+        ]
+
+        # Persist discovery results as evidence
+        await record_audit_evidence(
+            model_id=request.modelId,
+            audit_phase="supply_chain_discovery",
+            payload=result,
+        )
+
+        # Log audit trail
+        await log_audit_event(
+            model_id=request.modelId,
+            phase="supply_chain_discovery",
+            action="supply_chain_discovered",
+            outcome="success",
+            details={"models_found": len(result.get("discoveredModels", []))},
+        )
+
         return result
     except Exception as e:
+        await log_audit_event(
+            model_id=request.modelId,
+            phase="supply_chain_discovery",
+            action="supply_chain_discovered",
+            outcome="failure",
+            details={"error": str(e)},
+        )
         raise HTTPException(status_code=500, detail=f"Data discovery failed: {str(e)}")
 
 
@@ -125,9 +159,25 @@ async def audit_supply_chain(request: AuditSupplyChainRequest, request_obj: Requ
             payload=report.model_dump(),
         )
 
+        # Log audit trail
+        await log_audit_event(
+            model_id=request.modelId,
+            phase="supply_chain_audit",
+            action="supply_chain_audited",
+            outcome="success",
+            details={"ip_clearance": all_cleared, "risk": risk.value},
+        )
+
         return report
 
     except Exception as e:
+        await log_audit_event(
+            model_id=request.modelId,
+            phase="supply_chain_audit",
+            action="supply_chain_audited",
+            outcome="failure",
+            details={"error": str(e)},
+        )
         raise HTTPException(status_code=500, detail=f"Supply chain audit failed: {str(e)}")
 
 

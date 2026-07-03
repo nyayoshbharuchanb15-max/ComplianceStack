@@ -24,6 +24,7 @@ is set to false, halting the certification process.
 from fastapi import APIRouter, HTTPException, Request
 from models.schemas import ScoreAuditWeightedRequest, WeightedAuditScore
 from services.auth import Scope, require_scope
+from services.evidence_store import record_audit_evidence, log_audit_event
 
 router = APIRouter(prefix="/api/scoring", tags=["Audit Scoring"])
 
@@ -162,7 +163,7 @@ async def score_audit_weighted(request: ScoreAuditWeightedRequest, request_obj: 
     else:
         summary_parts.append("Assessment: NON-COMPLIANT — significant remediations required.")
 
-    return WeightedAuditScore(
+    result = WeightedAuditScore(
         modelId=request.modelId,
         overallScore=overall_score,
         categoryScores=category_scores,
@@ -170,3 +171,21 @@ async def score_audit_weighted(request: ScoreAuditWeightedRequest, request_obj: 
         certificationEligible=certification_eligible,
         summary=" | ".join(summary_parts),
     )
+
+    # Persist to evidence store (ISO 42001 Clause 7.5)
+    await record_audit_evidence(
+        model_id=request.modelId,
+        audit_phase="weighted_scoring",
+        payload=result.model_dump(),
+    )
+
+    # Log audit trail
+    await log_audit_event(
+        model_id=request.modelId,
+        phase="weighted_scoring",
+        action="score_calculated",
+        outcome="success",
+        details={"overall_score": overall_score, "certification_eligible": certification_eligible},
+    )
+
+    return result

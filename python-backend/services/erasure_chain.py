@@ -116,7 +116,7 @@ class ErasureChain:
         try:
             async with neo4j_client.driver.session() as session:
                 result = await session.run(
-                    "MATCH (m:Model {model_id: $model_id}) "
+                    "MATCH (m:Model {modelId: $model_id}) "
                     "OPTIONAL MATCH (m)-[r]-() "
                     "DELETE r, m "
                     "RETURN count(m) AS models_deleted",
@@ -267,7 +267,7 @@ async def access_data_subject_records(
     if neo4j_client.driver is not None:
         async with neo4j_client.driver.session() as session:
             graph = await session.run(
-                "MATCH (m:Model {model_id: $model_id}) "
+                "MATCH (m:Model {modelId: $model_id}) "
                 "OPTIONAL MATCH (m)-[r]-(related) "
                 "RETURN m, collect(r) AS relationships",
                 model_id=model_id,

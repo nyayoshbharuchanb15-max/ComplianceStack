@@ -19,7 +19,7 @@ from models.schemas import (
 )
 from services.auth import Scope, require_scope
 from services.session_memory_auditor import audit_session_memory
-from services.evidence_store import record_audit_evidence
+from services.evidence_store import record_audit_evidence, log_audit_event
 
 router = APIRouter(prefix="/api/session-memory", tags=["Session Memory Audit"])
 
@@ -56,6 +56,15 @@ async def audit_memory(request: AuditSessionMemoryRequest, request_obj: Request)
         model_id=request.modelId,
         audit_phase="session_memory_audit",
         payload=report.model_dump(),
+    )
+
+    # Log audit trail
+    await log_audit_event(
+        model_id=request.modelId,
+        phase="session_memory_audit",
+        action="session_memory_audited",
+        outcome="success",
+        details={"compliant": report.compliant},
     )
 
     return report

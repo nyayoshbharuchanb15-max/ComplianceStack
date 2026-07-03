@@ -1,10 +1,10 @@
 """
 PII Redaction Middleware — Zero-Trust Data Minimization
 ─────────────────────────────────────────────────────────
-Intercepts all /api/* request bodies and responses, redacting PII
+Intercepts all /api/* request and response bodies, redacting PII
 via the existing PIIRedactor singleton.
 
-  - Requests:  PII is detected and logged (field names only, never values)
+  - Requests:  PII is detected, redacted before forwarding, and logged (field names only)
   - Responses: PII is redacted before leaving the server
   - Header:    X-PII-Redacted: true when any field was redacted
   - Audit:     Each event is recorded in the pii_redactions table
@@ -34,14 +34,13 @@ JSON_CONTENT_TYPES = ("application/json", "application/problem+json")
 
 class PIIRedactionMiddleware:
     """
-    ASGI middleware that redacts PII from request/response bodies.
+    ASGI middleware that redacts PII from both request and response bodies.
 
-    The middleware is fully transparent — it reads the body, redacts PII,
-    logs the event, and either passes through or rewrites the body.
-
-    - Request body is parsed for PII detection only (audit logging).
-      The original body still reaches the route handler.
-    - Response body is parsed, redacted, and rewritten.
+    - Request body: PII is detected, logged (field names only), and redacted
+      before the route handler receives it. This enforces GDPR Art. 5(1)(c)
+      data minimization at the API boundary.
+    - Response body: PII is detected, logged, and redacted before leaving
+      the server.
     - X-PII-Redacted: true header is injected when any PII was removed.
     """
 
@@ -62,22 +61,29 @@ class PIIRedactionMiddleware:
         endpoint = f"{method} {path}"
 
         # ── Request interception ───────────────────────────────
-        # Read raw body, detect PII, log field names, then allow
-        # the original body to flow through to the route handler.
+        # Read raw body, detect PII, redact, and forward the redacted version.
         body_received: list[bytes] = []
         request_pii_fields: list[str] = []
+        redacted_request_body: Optional[bytes] = None
 
         async def receive_wrapper():
-            nonlocal body_received, request_pii_fields
+            nonlocal body_received, request_pii_fields, redacted_request_body
             msg = await receive()
             if msg["type"] == "http.request":
                 chunk = msg.get("body", b"")
                 body_received.append(chunk)
                 if msg.get("more_body", False) is False and chunk:
                     try:
-                        data = json.loads(b"".join(body_received))
+                        full_body = b"".join(body_received)
+                        data = json.loads(full_body)
                         redacted = pii_redactor.redact(data)
                         request_pii_fields = _find_redacted_field_paths(data, redacted)
+                        if request_pii_fields:
+                            redacted_request_body = json.dumps(
+                                redacted, default=str
+                            ).encode("utf-8")
+                            # Return redacted body to the route handler
+                            msg = {**msg, "body": redacted_request_body}
                     except (json.JSONDecodeError, UnicodeDecodeError):
                         pass
             return msg

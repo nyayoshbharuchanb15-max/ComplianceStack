@@ -20,7 +20,7 @@ from fastapi import APIRouter, HTTPException, Request
 from models.schemas import MonitorDriftRequest, DriftReport
 from services.auth import Scope, require_scope
 from services.drift_detector import detect_drift
-from services.evidence_store import record_audit_evidence, record_drift_alert
+from services.evidence_store import record_audit_evidence, record_drift_alert, log_audit_event
 from services.redis_webhook import webhook_engine
 
 router = APIRouter(prefix="/api/drift", tags=["Drift Monitoring"])
@@ -60,6 +60,15 @@ async def monitor_model_drift(request: MonitorDriftRequest, request_obj: Request
             model_id=request.modelId,
             audit_phase="drift_monitoring",
             payload=report.model_dump(),
+        )
+
+        # Log audit trail
+        await log_audit_event(
+            model_id=request.modelId,
+            phase="drift_monitoring",
+            action="drift_monitored",
+            outcome="success",
+            details={"overall_drift_status": report.overallDriftStatus.value},
         )
 
         # Log individual drift alerts

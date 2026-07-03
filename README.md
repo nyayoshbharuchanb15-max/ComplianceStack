@@ -2,7 +2,7 @@
 
 # ComplianceStack
 
-### Enterprise AI Governance — Zero-Data-Egress Compliance Auditing
+### Enterprise AI Governance — Zero-Data-Egress-by-Default Compliance Auditing
 
 **The first open-source MCP server that audits AI models against 5 regulatory frameworks in real-time.**
 
@@ -25,14 +25,16 @@
 
 > **AI regulation is here.** The EU AI Act became law in August 2024. GDPR fines exceeded €2 billion in 2024. India's DPDP Act is being enforced. Your AI models need compliance auditing — and you need it to be fast, private, and auditable.
 
-ComplianceStack is a **17-phase audit pipeline** that plugs directly into your AI assistant (Claude Desktop, Cursor, Windsurf) via the Model Context Protocol. Every audit runs **entirely on-premise** with zero data leaving your infrastructure.
+ComplianceStack is a **17-phase audit pipeline** that plugs directly into your AI assistant (Claude Desktop, Cursor, Windsurf) via the Model Context Protocol. Every audit runs **entirely on-premise** with zero data leaving your infrastructure by default.
+
+**MCP Capabilities:** 17 tools | 5 resources | 4 prompts | 3 transports (stdio, SSE, Streamable HTTP)
 
 ### Key Differentiators
 
 | Feature | ComplianceStack | Traditional GRC Tools |
 |---------|----------------|----------------------|
-| **MCP Integration** | Native — works with Claude, Cursor, Windsurf | Requires separate API integration |
-| **Zero Data Egress** | All operations in-process | Cloud-dependent |
+| **MCP Integration** | Native — 17 tools, 5 resources, 4 prompts via stdio/SSE/Streamable HTTP | Requires separate API integration |
+| **Zero Data Egress** | All operations in-process (adversarial testing optional) | Cloud-dependent |
 | **Real-time Auditing** | Instant feedback in your IDE | Batch processing |
 | **17-Phase Pipeline** | Risk, Bias, DPIA, Drift, Agent Trust, and more | Typically 3-5 checks |
 | **W3C Verifiable Credentials** | Cryptographically signed audit certificates | PDF reports |
@@ -103,6 +105,30 @@ ComplianceStack is a **17-phase audit pipeline** that plugs directly into your A
 
 ---
 
+## External Service Configuration
+
+By default, ComplianceStack operates with **zero data egress** — all operations run locally. However, adversarial testing (Phase 7) can optionally route prompts to an external LLM endpoint for more comprehensive testing.
+
+| Variable | Default | Description |
+|----------|---------|-------------|
+| `ADV_ENDPOINT_URL` | `""` (empty) | **Optional.** External endpoint for adversarial testing prompts. When set, adversarial tests route to this URL. When empty, adversarial tests run locally or are skipped. |
+| `ADV_API_KEY` | `""` (empty) | API key for the external adversarial endpoint (required only if `ADV_ENDPOINT_URL` is set). |
+| `ADV_TARGET_MODEL` | `gpt-4o-mini` | Model name used at the external endpoint for adversarial test generation. |
+| `ADV_JUDGE_MODEL` | `gpt-4o-mini` | Model name used at the external endpoint for adversarial test evaluation. |
+
+**What remains zero-egress regardless of configuration:**
+- Risk classification (EU AI Act, NIST, ISO, GDPR, DPDP)
+- Supply chain audit and provenance graph (Neo4j)
+- Human oversight verification
+- Bias assessment (Fairlearn)
+- DPIA generation
+- Weighted scoring and certification
+- W3C Verifiable Credential signing
+- Drift monitoring
+- Session memory, RAG quality, prompt safety, agent trust, tool permissions, and agent autonomy audits
+
+---
+
 ## Quick Start
 
 ### Prerequisites
@@ -127,6 +153,8 @@ curl http://localhost:8000/health
 ```
 
 ### 3. Connect an MCP Client
+
+ComplianceStack supports **all three MCP transport modes**: stdio, SSE, and Streamable HTTP.
 
 #### Claude Desktop (Stdio)
 
@@ -155,6 +183,21 @@ Add to `claude_desktop_config.json`:
   }
 }
 ```
+
+#### Streamable HTTP (Modern MCP Clients)
+
+```json
+{
+  "mcpServers": {
+    "compliance-stack": {
+      "url": "http://localhost:3000/mcp",
+      "transport": "streamable-http"
+    }
+  }
+}
+```
+
+Set `MCP_TRANSPORT=streamable-http` in your `.env` to enable the Streamable HTTP transport on port 3000.
 
 ### 4. Run Your First Audit
 
@@ -252,7 +295,7 @@ Audit certificates are issued as **W3C VCs with Ed25519 cryptographic proof**:
 
 | Feature | Description |
 |---------|-------------|
-| **Zero Data Egress** | All operations in-process, no external API calls |
+| **Zero Data Egress** | All operations in-process by default (adversarial testing is optional external) |
 | **OAuth 2.1 + RBAC** | Admin, auditor, viewer roles with scoped endpoints |
 | **PII Redaction** | Middleware intercepts and redacts PII from all API responses |
 | **Ed25519 Signing** | Keys never leave the container |

@@ -19,7 +19,7 @@ from models.schemas import (
 )
 from services.auth import Scope, require_scope
 from services.agent_trust_auditor import audit_agent_trust
-from services.evidence_store import record_audit_evidence
+from services.evidence_store import record_audit_evidence, log_audit_event
 
 router = APIRouter(prefix="/api/agent-trust", tags=["Agent Trust Audit"])
 
@@ -51,6 +51,15 @@ async def evaluate_trust(request: AuditAgentTrustRequest, request_obj: Request):
         model_id=request.modelId,
         audit_phase="agent_trust_audit",
         payload=report.model_dump(),
+    )
+
+    # Log audit trail
+    await log_audit_event(
+        model_id=request.modelId,
+        phase="agent_trust_audit",
+        action="agent_trust_evaluated",
+        outcome="success",
+        details={"overall_risk": report.overallRisk.value},
     )
 
     return report

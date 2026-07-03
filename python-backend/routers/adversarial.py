@@ -23,7 +23,7 @@ from models.schemas import (
     RiskLevel,
 )
 from services.auth import Scope, require_scope
-from services.evidence_store import record_audit_evidence
+from services.evidence_store import record_audit_evidence, log_audit_event
 from services.adversarial_tester import create_tester
 
 router = APIRouter(prefix="/api/adversarial", tags=["Adversarial Testing"])
@@ -96,6 +96,15 @@ async def run_adversarial_tests(request: RunAdversarialTestsRequest, request_obj
         model_id=request.modelId,
         audit_phase="adversarial_testing",
         payload=report.model_dump(),
+    )
+
+    # Log audit trail
+    await log_audit_event(
+        model_id=request.modelId,
+        phase="adversarial_testing",
+        action="adversarial_tests_run",
+        outcome="success",
+        details={"overall_risk": overall_risk.value, "compliant": compliant},
     )
 
     return report

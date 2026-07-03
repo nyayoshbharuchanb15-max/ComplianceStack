@@ -13,6 +13,7 @@ ISO/IEC 42001:2023 Clause 6.1 — Risk assessment planning.
 from fastapi import APIRouter, Depends, HTTPException, Request
 from models.schemas import ClassifyRiskRequest, RiskTierResult, RiskTier
 from services.auth import Scope, require_scope
+from services.evidence_store import record_audit_evidence, log_audit_event
 
 router = APIRouter(prefix="/api/risk", tags=["Risk Classification"])
 
@@ -52,13 +53,31 @@ async def classify_ai_risk(request: ClassifyRiskRequest, request_obj: Request):
     rationale = _build_rationale(tier, request)
     compliant = tier != RiskTier.prohibited
 
-    return RiskTierResult(
+    result = RiskTierResult(
         modelId=request.modelId,
         tier=tier,
         rationale=rationale,
         mappedArticles=_get_articles(tier),
         compliant=compliant,
     )
+
+    # Persist to evidence store (ISO 42001 Clause 7.5)
+    await record_audit_evidence(
+        model_id=request.modelId,
+        audit_phase="risk_classification",
+        payload=result.model_dump(),
+    )
+
+    # Log audit trail mutation
+    await log_audit_event(
+        model_id=request.modelId,
+        phase="risk_classification",
+        action="risk_classified",
+        outcome="success",
+        details={"tier": tier.value, "compliant": compliant},
+    )
+
+    return result
 
 
 def _evaluate_risk_tier(request: ClassifyRiskRequest) -> RiskTier:
@@ -119,6 +138,8 @@ def _get_articles(tier: RiskTier) -> list[str]:
         "EU AI Act Art. 6 (Risk Classification)",
         "NIST AI RMF MAP 1.1 (Risk Mapping)",
         "ISO/IEC 42001:2023 Clause 6.1 (Risk Assessment)",
+        "GDPR Art. 35 (Data Protection Impact Assessment)",
+        "DPDP Act 2023 Sec. 7 (Duties of Data Fiduciary)",
     ]
     if tier == RiskTier.prohibited:
         base.insert(0, "EU AI Act Art. 5 (Prohibited Practices)")

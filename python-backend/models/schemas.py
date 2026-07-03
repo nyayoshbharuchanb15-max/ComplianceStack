@@ -117,6 +117,8 @@ class ProvenanceReport(BaseModel):
             "EU AI Act Art. 12 (Documentation)",
             "NIST AI RMF GOVERN 1.2",
             "ISO/IEC 42001:2023 Clause 7.4.3",
+            "GDPR Art. 5(1)(d) (Accuracy of Data)",
+            "DPDP Act 2023 Sec. 7 (Duties of Data Fiduciary)",
         ]
     )
     iso42001Clause: str = "ISO/IEC 42001:2023 Clause 7.4.3 (Supply Chain)"
@@ -487,6 +489,22 @@ class DPDPComplianceReport(BaseModel):
 class DPDPSummaryRequest(BaseModel):
     modelId: str
     dataFiduciary: str
+    consentMechanism: str = "explicit"     # explicit, implied, opt_out, none
+    dataPrincipalRights: list[str] = Field(default_factory=list)  # access, correction, erasure, grievance_redressal, nomination
+    processingPurpose: str = ""
+    dataLocalization: bool = False
+    crossBorderTransfer: bool = False
+    transferCountries: list[str] = Field(default_factory=list)
+    hasDataProtectionOfficer: bool = False
+    hasPrivacyPolicy: bool = False
+    hasBreachNotification: bool = False
+    breachNotificationHours: int = 72
+    hasChildProtection: bool = False
+    hasSignificantDataFiduciaryObligations: bool = False
+    processingRecords: bool = False
+    dataRetentionDays: int = 365
+    hasConsentRecords: bool = False
+    hasAuditTrail: bool = False
 
 
 # ─── GDPR Art. 30: Record of Processing Activities ────────────────

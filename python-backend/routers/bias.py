@@ -17,7 +17,7 @@ from fastapi import APIRouter, HTTPException, Request
 from models.schemas import RunBiasAssessmentRequest, BiasReport
 from services.auth import Scope, require_scope
 from services.bias_engine import run_bias_assessment
-from services.evidence_store import record_audit_evidence
+from services.evidence_store import record_audit_evidence, log_audit_event
 
 router = APIRouter(prefix="/api/bias", tags=["Bias Assessment"])
 
@@ -49,6 +49,15 @@ async def assess_bias(request: RunBiasAssessmentRequest, request_obj: Request):
             model_id=request.modelId,
             audit_phase="bias_assessment",
             payload=report.model_dump(),
+        )
+
+        # Log audit trail
+        await log_audit_event(
+            model_id=request.modelId,
+            phase="bias_assessment",
+            action="bias_assessed",
+            outcome="success",
+            details={"bias_risk": report.overallBiasRisk.value},
         )
 
         return report

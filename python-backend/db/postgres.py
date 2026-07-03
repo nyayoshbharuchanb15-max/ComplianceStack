@@ -227,6 +227,162 @@ class PostgresClient:
             logger.exception("Failed to get audit history")
             return []
 
+    # ─── Certificate Revocation (CRL) ──────────────────────────────
+
+    async def log_audit_event(
+        self,
+        model_id: str,
+        phase: str,
+        action: str,
+        actor: str = "system",
+        outcome: str = "success",
+        details: Optional[dict[str, Any]] = None,
+    ) -> Optional[str]:
+        """
+        Log a mutation event in the audit trail.
+
+        GDPR Art. 5(2) — Accountability requires demonstrating compliance.
+        ISO 42001:2023 Clause 7.5 — Documented information includes mutation history.
+        """
+        if self.pool is None:
+            logger.warning("PostgreSQL pool not available — cannot log audit event")
+            return None
+        event_id = str(uuid.uuid4())
+        now = datetime.now(timezone.utc).isoformat()
+        try:
+            async with self.pool.acquire() as conn:
+                await conn.execute(
+                    """
+                    INSERT INTO audit_trail (event_id, model_id, phase, action,
+                                             actor, outcome, details, created_at)
+                    VALUES ($1, $2, $3, $4, $5, $6, $7::jsonb, $8)
+                    """,
+                    event_id,
+                    model_id,
+                    phase,
+                    action,
+                    actor,
+                    outcome,
+                    json.dumps(details) if details else None,
+                    now,
+                )
+            return event_id
+        except Exception:
+            logger.exception("Failed to log audit event")
+            return None
+
+    async def revoke_certificate(
+        self,
+        certificate_id: str,
+        reason: str = "unspecified",
+    ) -> bool:
+        """
+        Revoke a certificate and add it to the Certificate Revocation List.
+
+        Returns True if the certificate was successfully revoked.
+        """
+        if self.pool is None:
+            logger.warning("PostgreSQL pool not available — cannot revoke certificate")
+            return False
+        now = datetime.now(timezone.utc).isoformat()
+        try:
+            async with self.pool.acquire() as conn:
+                result = await conn.execute(
+                    """
+                    UPDATE certificates
+                    SET revoked = TRUE,
+                        revoked_at = $2,
+                        revocation_reason = $3
+                    WHERE certificate_id = $1
+                    """,
+                    certificate_id,
+                    now,
+                    reason,
+                )
+                return result == "UPDATE 1"
+        except Exception:
+            logger.exception("Failed to revoke certificate")
+            return False
+
+    async def check_certificate_revocation(
+        self,
+        certificate_id: str,
+    ) -> dict[str, Any]:
+        """
+        Check if a certificate has been revoked (OCSP-style query).
+
+        Returns a dict with revoked, revoked_at, and revocation_reason.
+        """
+        if self.pool is None:
+            return {"revoked": False, "revoked_at": None, "revocation_reason": None}
+        try:
+            async with self.pool.acquire() as conn:
+                row = await conn.fetchrow(
+                    """
+                    SELECT revoked, revoked_at, revocation_reason, expires_at
+                    FROM certificates
+                    WHERE certificate_id = $1
+                    """,
+                    certificate_id,
+                )
+                if row is None:
+                    return {"revoked": False, "revoked_at": None, "revocation_reason": None}
+                return {
+                    "revoked": row["revoked"],
+                    "revoked_at": row["revoked_at"].isoformat() if row["revoked_at"] else None,
+                    "revocation_reason": row["revocation_reason"],
+                    "expires_at": row["expires_at"].isoformat() if row["expires_at"] else None,
+                }
+        except Exception:
+            logger.exception("Failed to check certificate revocation")
+            return {"revoked": False, "revoked_at": None, "revocation_reason": None}
+
+    async def get_revoked_certificates(self) -> list[dict[str, Any]]:
+        """
+        Retrieve all revoked certificates (CRL endpoint).
+
+        Returns a list of revoked certificate entries for external verifiers.
+        """
+        if self.pool is None:
+            return []
+        try:
+            async with self.pool.acquire() as conn:
+                rows = await conn.fetch(
+                    """
+                    SELECT certificate_id, model_id, revoked_at, revocation_reason, expires_at
+                    FROM certificates
+                    WHERE revoked = TRUE
+                    ORDER BY revoked_at DESC
+                    """
+                )
+                return [dict(row) for row in rows]
+        except Exception:
+            logger.exception("Failed to get revoked certificates")
+            return []
+
+    async def get_certificate_by_id(
+        self,
+        certificate_id: str,
+    ) -> Optional[dict[str, Any]]:
+        """Retrieve a specific certificate by ID."""
+        if self.pool is None:
+            return None
+        try:
+            async with self.pool.acquire() as conn:
+                row = await conn.fetchrow(
+                    """
+                    SELECT certificate_id, model_id, vc_payload, evidence_id,
+                           created_at, expires_at, revoked, revoked_at, revocation_reason
+                    FROM certificates
+                    WHERE certificate_id = $1
+                    """,
+                    certificate_id,
+                )
+                return dict(row) if row else None
+        except Exception:
+            logger.exception("Failed to get certificate")
+            return None
+
 
 # Singleton instance
 pg_client = PostgresClient()

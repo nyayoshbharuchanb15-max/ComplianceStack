@@ -18,7 +18,7 @@ from models.schemas import (
 )
 from services.auth import Scope, require_scope
 from services.rag_quality_auditor import evaluate_rag_quality
-from services.evidence_store import record_audit_evidence
+from services.evidence_store import record_audit_evidence, log_audit_event
 
 router = APIRouter(prefix="/api/rag-quality", tags=["RAG Quality Audit"])
 
@@ -50,6 +50,15 @@ async def evaluate_quality(request: AuditRAGQualityRequest, request_obj: Request
         model_id=request.modelId,
         audit_phase="rag_quality_audit",
         payload=report.model_dump(),
+    )
+
+    # Log audit trail
+    await log_audit_event(
+        model_id=request.modelId,
+        phase="rag_quality_audit",
+        action="rag_quality_evaluated",
+        outcome="success",
+        details={"overall_risk": report.overallRisk.value},
     )
 
     return report

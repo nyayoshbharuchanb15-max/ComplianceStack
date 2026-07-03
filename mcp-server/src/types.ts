@@ -114,6 +114,7 @@ export interface WeightedAuditScore {
   categoryScores: Record<string, number>;
   blockerFailures: string[];      // Non-empty → halt certification
   certificationEligible: boolean;
+  compliant: boolean;
   summary: string;
   mappedArticles: string[];
   iso42001Clause: string;
@@ -147,6 +148,7 @@ export interface VerifiableCredential {
 export interface AuditCertificate {
   modelId: string;
   vc: VerifiableCredential;
+  compliant: boolean;
   storedInPostgres: boolean;
   evidenceId: string;             // UUID reference in PostgreSQL evidence store
   mappedArticles: string[];
@@ -178,6 +180,9 @@ export interface DiscoveryResult {
   datasetsDiscovered: number;
   artifactsDiscovered: number;
   graphPopulated: boolean;
+  mappedArticles: string[];
+  iso42001Clause: string;
+  compliant: boolean;
   timestamp: string;
 }
 
@@ -194,9 +199,26 @@ export interface DPDPSection {
 export interface DPDPComplianceReport {
   modelId: string;
   dataFiduciary: string;
+  consentMechanism: "explicit" | "implied" | "opt_out" | "none";
+  dataPrincipalRights: string[];
+  processingPurpose: string;
+  dataLocalization: boolean;
+  crossBorderTransfer: boolean;
+  transferCountries: string[];
+  hasDataProtectionOfficer: boolean;
+  hasPrivacyPolicy: boolean;
+  hasBreachNotification: boolean;
+  breachNotificationHours: number;
+  hasChildProtection: boolean;
+  hasSignificantDataFiduciaryObligations: boolean;
+  processingRecords: boolean;
+  dataRetentionDays: number;
+  hasConsentRecords: boolean;
+  hasAuditTrail: boolean;
   sections: DPDPSection[];
   overallCompliance: "compliant" | "partially_compliant" | "non_compliant";
-  mappedSections: string[];
+  mappedArticles: string[];
+  iso42001Clause: string;
   compliant: boolean;
   timestamp: string;
 }

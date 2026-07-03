@@ -1,8 +1,8 @@
 {
   "name": "compliance-stack-mcp-server",
-  "version": "2.0.0",
+  "version": "3.1.0",
   "displayName": "ComplianceStack MCP Server",
-  "description": "Enterprise-grade AI compliance and governance platform with zero-data-egress auditing. Audits AI models against EU AI Act, NIST AI RMF, ISO/IEC 42001, GDPR, and India DPDP Act with a 17-phase pipeline. Issues W3C Verifiable Credentials.",
+  "description": "Enterprise-grade AI compliance and governance platform with zero-data-egress auditing. 17-phase audit pipeline across EU AI Act, NIST AI RMF, ISO/IEC 42001, GDPR, and India DPDP Act. Exposes 17 tools, 5 resources, and 4 prompts via MCP. Issues W3C Verifiable Credentials.",
   "author": {
     "name": "Nyayosh Bharuchanb15-Max",
     "url": "https://github.com/nyayoshbharuchanb15-max"
@@ -33,7 +33,10 @@
     "drift-detection",
     "data-protection",
     "compliance",
-    "zero-data-egress"
+    "zero-data-egress",
+    "mcp-resources",
+    "mcp-prompts",
+    "streamable-http"
   ],
   "categories": [
     "security",
@@ -44,96 +47,377 @@
   "transports": {
     "stdio": true,
     "sse": true,
-    "streamable-http": false
+    "streamable-http": true
   },
+  "capabilities": {
+    "tools": {
+      "listChanged": true,
+      "count": 17
+    },
+    "resources": {
+      "listChanged": true,
+      "count": 5
+    },
+    "prompts": {
+      "listChanged": true,
+      "count": 4
+    },
+    "logging": {}
+  },
+  "mcpSpecVersion": "2024-11-05",
   "tools": [
     {
       "name": "classify_ai_risk",
-      "description": "EU AI Act risk tier classification (Prohibited, High, Limited, Minimal)",
+      "description": "Classifies an AI model into an EU AI Act risk tier (Prohibited, High, Limited, Minimal). Uses sector context, model type, and profiling capability. Returns tier with rationale and regulatory article mappings. EU AI Act Art. 6, Annex I-III | NIST AI RMF MAP 1.1 | ISO/IEC 42001 Clause 6.1",
       "inputSchema": {
         "type": "object",
-        "required": ["modelId", "modelType", "sector"]
+        "properties": {
+          "modelId": { "type": "string", "description": "Unique model identifier", "minLength": 1, "maxLength": 255, "pattern": "^[a-zA-Z0-9][a-zA-Z0-9._-]*$" },
+          "modelType": { "type": "string", "enum": ["general_purpose_ai", "biometric", "critical_infrastructure", "educational", "employment", "credit", "law_enforcement", "other"], "description": "Category of the AI system per EU AI Act Annex III" },
+          "sector": { "type": "string", "enum": ["healthcare", "finance", "criminal_justice", "employment", "education", "critical_infrastructure", "other"], "description": "Deployment sector for risk context" },
+          "usesProfiling": { "type": "boolean", "description": "Does the system perform profiling of natural persons?", "default": false },
+          "deployer": { "type": "string", "description": "Name of the deploying organization", "minLength": 1, "maxLength": 500 }
+        },
+        "required": ["modelId", "modelType", "sector"],
+        "additionalProperties": false
       }
     },
     {
       "name": "discover_supply_chain",
-      "description": "Auto-discover ML models and datasets on filesystem, populate Neo4j provenance graph",
+      "description": "Automatically discovers ML models and datasets on the filesystem and populates the Neo4j provenance graph. EU AI Act Art. 10 | ISO/IEC 42001 Clause 7.4.3",
       "inputSchema": {
         "type": "object",
-        "required": ["modelId"]
+        "properties": {
+          "modelId": { "type": "string", "description": "Unique model identifier", "minLength": 1, "maxLength": 255, "pattern": "^[a-zA-Z0-9][a-zA-Z0-9._-]*$" },
+          "modelSearchPaths": { "type": "array", "items": { "type": "string", "minLength": 1 }, "description": "Directories to scan for model artifacts", "maxItems": 50, "default": [] },
+          "dataSearchPaths": { "type": "array", "items": { "type": "string", "minLength": 1 }, "description": "Directories to scan for dataset files", "maxItems": 50, "default": [] }
+        },
+        "required": ["modelId"],
+        "additionalProperties": false
       }
     },
     {
       "name": "audit_supply_chain",
-      "description": "Audit AI model supply chain via Neo4j provenance graph",
+      "description": "Audits the AI model supply chain via Neo4j provenance graph. Traces data lineage, IP clearance, and third-party dependencies. EU AI Act Art. 10, 12 | NIST AI RMF GOVERN 1.2 | ISO/IEC 42001 Clause 7.4.3",
       "inputSchema": {
         "type": "object",
-        "required": ["modelId"]
+        "properties": {
+          "modelId": { "type": "string", "description": "Unique model identifier", "minLength": 1, "maxLength": 255, "pattern": "^[a-zA-Z0-9][a-zA-Z0-9._-]*$" },
+          "deepScan": { "type": "boolean", "description": "Perform recursive scan of all transitive dependencies", "default": false }
+        },
+        "required": ["modelId"],
+        "additionalProperties": false
       }
     },
     {
       "name": "verify_human_oversight",
-      "description": "Verify HITL and kill-switch controls (BLOCKER FAIL if missing)",
+      "description": "Verifies HITL and kill-switch controls. BLOCKER FAIL if missing. EU AI Act Art. 14 | NIST AI RMF GOVERN 3.2 | ISO/IEC 42001 Clause 8.2 | GDPR Art. 22",
       "inputSchema": {
         "type": "object",
-        "required": ["modelId", "hasHumanInTheLoop", "hasKillSwitch", "deploymentContext"]
+        "properties": {
+          "modelId": { "type": "string", "description": "Unique model identifier", "minLength": 1, "maxLength": 255, "pattern": "^[a-zA-Z0-9][a-zA-Z0-9._-]*$" },
+          "hasHumanInTheLoop": { "type": "boolean", "description": "Does the system support HITL review?" },
+          "hasKillSwitch": { "type": "boolean", "description": "Does the system have a physical/software kill-switch?" },
+          "oversightProcess": { "type": "string", "description": "Description of the human oversight process", "minLength": 1, "maxLength": 5000 },
+          "deploymentContext": { "type": "string", "enum": ["real_time", "batch", "assistive", "autonomous"], "description": "How the system operates in practice" }
+        },
+        "required": ["modelId", "hasHumanInTheLoop", "hasKillSwitch", "deploymentContext"],
+        "additionalProperties": false
       }
     },
     {
       "name": "run_bias_assessment",
-      "description": "Fairlearn bias assessment: demographic parity, equal opportunity, disparate impact",
+      "description": "Fairlearn bias assessment: demographic parity, equal opportunity, disparate impact. EU AI Act Art. 10 | NIST AI RMF MEASURE 2.2 | ISO/IEC 42001 Clause 8.1.2 | GDPR Art. 9, 35",
       "inputSchema": {
         "type": "object",
-        "required": ["modelId", "datasetSample", "sensitiveFeatures"]
+        "properties": {
+          "modelId": { "type": "string", "description": "Unique model identifier", "minLength": 1, "maxLength": 255, "pattern": "^[a-zA-Z0-9][a-zA-Z0-9._-]*$" },
+          "datasetSample": { "type": "array", "items": { "type": "object" }, "description": "Array of data samples with labels and protected attributes", "minItems": 1 },
+          "sensitiveFeatures": { "type": "array", "items": { "type": "string", "enum": ["race", "gender", "age", "disability", "socioeconomic_status", "religion", "sexual_orientation", "national_origin"] }, "description": "Protected attributes to test for bias", "minItems": 1, "maxItems": 10, "uniqueItems": true },
+          "fairnessThreshold": { "type": "number", "description": "Disparate impact ratio threshold (0.0-1.0, default: 0.8)", "minimum": 0.0, "maximum": 1.0, "default": 0.8 }
+        },
+        "required": ["modelId", "datasetSample", "sensitiveFeatures"],
+        "additionalProperties": false
       }
     },
     {
       "name": "generate_dpia",
-      "description": "GDPR Art. 35 DPIA with cross-border transfer analysis",
+      "description": "GDPR Art. 35 DPIA with cross-border transfer analysis. GDPR Art. 5, 9, 22, 35, 44-49 | ISO/IEC 42001 Clause 6.2",
       "inputSchema": {
         "type": "object",
-        "required": ["modelId", "dataController", "dpoName", "processingPurpose", "dataCategories"]
+        "properties": {
+          "modelId": { "type": "string", "description": "Unique model identifier", "minLength": 1, "maxLength": 255, "pattern": "^[a-zA-Z0-9][a-zA-Z0-9._-]*$" },
+          "dataController": { "type": "string", "description": "Name/entity of the data controller", "minLength": 1, "maxLength": 500 },
+          "dpoName": { "type": "string", "description": "Name of the Data Protection Officer", "minLength": 1, "maxLength": 500 },
+          "processingPurpose": { "type": "string", "description": "Description of the processing purpose", "minLength": 1, "maxLength": 5000 },
+          "dataCategories": { "type": "array", "items": { "type": "string", "enum": ["biometric", "location", "health", "financial", "behavioral", "demographic", "communication", "genetic", "political", "religious", "other"] }, "description": "Categories of personal data processed", "minItems": 1, "maxItems": 20, "uniqueItems": true },
+          "crossBorderTransfer": { "type": "boolean", "description": "Does processing involve cross-border data transfer?", "default": false },
+          "thirdCountries": { "type": "array", "items": { "type": "string", "minLength": 2, "maxLength": 3 }, "description": "ISO 3166-1 alpha-2/3 country codes for third countries", "maxItems": 50, "default": [] }
+        },
+        "required": ["modelId", "dataController", "dpoName", "processingPurpose", "dataCategories"],
+        "additionalProperties": false
       }
     },
     {
       "name": "run_adversarial_tests",
-      "description": "Adversarial robustness testing: prompt injection, jailbreak, OOD, model inversion",
+      "description": "Adversarial robustness testing: prompt injection, jailbreak, OOD, model inversion. EU AI Act Art. 15 | NIST AI RMF MEASURE 1.3 | ISO/IEC 42001 Clause 8.1.3",
       "inputSchema": {
         "type": "object",
-        "required": ["modelId", "testSuites"]
+        "properties": {
+          "modelId": { "type": "string", "description": "Unique model identifier", "minLength": 1, "maxLength": 255, "pattern": "^[a-zA-Z0-9][a-zA-Z0-9._-]*$" },
+          "testSuites": { "type": "array", "items": { "type": "string", "enum": ["prompt_injection", "jailbreak", "ood_detection", "model_inversion", "membership_inference"] }, "description": "Adversarial test suites to execute", "minItems": 1, "maxItems": 5, "uniqueItems": true },
+          "severityThreshold": { "type": "string", "enum": ["low", "medium", "high"], "description": "Minimum severity to flag as failure", "default": "medium" }
+        },
+        "required": ["modelId", "testSuites"],
+        "additionalProperties": false
       }
     },
     {
       "name": "score_audit_weighted",
-      "description": "Aggregate audit phases into weighted score (0-100), BLOCKER FAIL halts certification",
+      "description": "Aggregate audit phases into weighted score (0-100), BLOCKER FAIL halts certification. NIST AI RMF MEASURE 4.1 | ISO/IEC 42001 Clause 9.1",
       "inputSchema": {
         "type": "object",
-        "required": ["modelId"]
+        "properties": {
+          "modelId": { "type": "string", "description": "Unique model identifier", "minLength": 1, "maxLength": 255, "pattern": "^[a-zA-Z0-9][a-zA-Z0-9._-]*$" },
+          "riskTier": { "type": "object", "properties": { "tier": { "type": "string" }, "compliant": { "type": "boolean" } }, "required": ["tier", "compliant"], "description": "Risk classification result" },
+          "supplyChain": { "type": "object", "properties": { "ipClearance": { "type": "boolean" }, "compliant": { "type": "boolean" } }, "required": ["ipClearance", "compliant"], "description": "Supply chain audit result" },
+          "oversight": { "type": "object", "properties": { "blocker": { "type": "boolean" }, "compliant": { "type": "boolean" } }, "required": ["blocker", "compliant"], "description": "Human oversight result" },
+          "bias": { "type": "object", "properties": { "overallBiasRisk": { "type": "string" }, "compliant": { "type": "boolean" } }, "required": ["overallBiasRisk", "compliant"], "description": "Bias assessment result" },
+          "dpia": { "type": "object", "properties": { "compliant": { "type": "boolean" } }, "required": ["compliant"], "description": "DPIA report result" },
+          "adversarial": { "type": "object", "properties": { "overallRisk": { "type": "string" }, "compliant": { "type": "boolean" } }, "required": ["overallRisk", "compliant"], "description": "Adversarial test result" }
+        },
+        "required": ["modelId"],
+        "additionalProperties": false
       }
     },
     {
       "name": "generate_audit_certificate",
-      "description": "Issue W3C Verifiable Credential (Ed25519-signed) for completed audit",
+      "description": "Issue W3C Verifiable Credential (Ed25519-signed) for completed audit. W3C VC Data Model 1.1 | ISO/IEC 42001 Clause 7.5",
       "inputSchema": {
         "type": "object",
-        "required": ["modelId", "weightedScore", "tier", "compliant", "issuerName"]
+        "properties": {
+          "modelId": { "type": "string", "description": "Unique model identifier", "minLength": 1, "maxLength": 255, "pattern": "^[a-zA-Z0-9][a-zA-Z0-9._-]*$" },
+          "weightedScore": { "type": "number", "description": "Final weighted audit score (0.0-100.0)", "minimum": 0.0, "maximum": 100.0 },
+          "tier": { "type": "string", "enum": ["prohibited", "high", "limited", "minimal", "certified"], "description": "Final risk tier or certification level" },
+          "compliant": { "type": "boolean", "description": "Overall compliance status" },
+          "issuerName": { "type": "string", "description": "Name of the issuing authority", "minLength": 1, "maxLength": 500 },
+          "validDays": { "type": "number", "description": "Validity period in days (default: 365)", "minimum": 1, "maximum": 3650, "default": 365 }
+        },
+        "required": ["modelId", "weightedScore", "tier", "compliant", "issuerName"],
+        "additionalProperties": false
       }
     },
     {
       "name": "monitor_model_drift",
-      "description": "Evidently AI drift detection with auto re-audit via Redis Streams",
+      "description": "Evidently AI drift detection with auto re-audit via Redis Streams. EU AI Act Art. 15 | NIST AI RMF MEASURE 3.3 | ISO/IEC 42001 Clause 9.1",
       "inputSchema": {
         "type": "object",
-        "required": ["modelId", "referenceData", "productionData", "features"]
+        "properties": {
+          "modelId": { "type": "string", "description": "Unique model identifier", "minLength": 1, "maxLength": 255, "pattern": "^[a-zA-Z0-9][a-zA-Z0-9._-]*$" },
+          "referenceData": { "type": "array", "items": { "type": "object" }, "description": "Reference/baseline dataset for drift comparison", "minItems": 1 },
+          "productionData": { "type": "array", "items": { "type": "object" }, "description": "Current production data for drift evaluation", "minItems": 1 },
+          "driftThreshold": { "type": "number", "description": "PSI/KS threshold for drift alert (default: 0.1)", "minimum": 0.0, "maximum": 1.0, "default": 0.1 },
+          "features": { "type": "array", "items": { "type": "string", "minLength": 1 }, "description": "Feature names to monitor for drift", "minItems": 1, "maxItems": 200, "uniqueItems": true }
+        },
+        "required": ["modelId", "referenceData", "productionData", "features"],
+        "additionalProperties": false
+      }
+    },
+    {
+      "name": "audit_session_memory",
+      "description": "Audits session memory isolation for AI agents. GDPR Art. 5(1)(f) | GDPR Art. 25 | DPDP Act Sec. 8 | EU AI Act Art. 15",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "modelId": { "type": "string", "description": "Unique model identifier", "minLength": 1, "maxLength": 255, "pattern": "^[a-zA-Z0-9][a-zA-Z0-9._-]*$" },
+          "sessionId": { "type": "string", "description": "Session identifier to audit", "minLength": 1, "maxLength": 255 },
+          "stmConfig": { "type": "object", "description": "Short-term memory configuration (maxTokens, maxHistory, wipeOnExpiry, isolation, etc.)", "properties": { "maxTokens": { "type": "number", "minimum": 1, "description": "Maximum context window tokens" }, "maxHistory": { "type": "number", "minimum": 0, "description": "Maximum conversation history turns" }, "wipeOnExpiry": { "type": "boolean", "description": "Whether to wipe data on session expiry" }, "isolation": { "type": "string", "enum": ["per_user", "per_session", "shared"], "description": "Memory isolation strategy" } }, "additionalProperties": true },
+          "ltmConfig": { "type": "object", "description": "Long-term memory configuration (optional)", "additionalProperties": true },
+          "sessionTimeoutMinutes": { "type": "number", "description": "Session timeout in minutes (default: 30)", "minimum": 1, "maximum": 1440, "default": 30 },
+          "isolationLevel": { "type": "string", "enum": ["per_user", "per_session", "shared"], "description": "Memory isolation level", "default": "per_user" }
+        },
+        "required": ["modelId", "sessionId", "stmConfig"],
+        "additionalProperties": false
+      }
+    },
+    {
+      "name": "audit_rag_quality",
+      "description": "Evaluates RAG pipeline quality: retrieval accuracy, embedding bias, freshness, hallucination rate. EU AI Act Art. 15 | NIST AI RMF MEASURE 3.3 | ISO/IEC 42001 Clause 9.1",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "modelId": { "type": "string", "description": "Unique model identifier", "minLength": 1, "maxLength": 255, "pattern": "^[a-zA-Z0-9][a-zA-Z0-9._-]*$" },
+          "vectorDbConfig": { "type": "object", "description": "Vector DB configuration (totalSources, freshSources, protectedGroups, biasScores)", "properties": { "totalSources": { "type": "number", "minimum": 0, "description": "Total number of knowledge sources" }, "freshSources": { "type": "number", "minimum": 0, "description": "Sources within freshness policy" }, "protectedGroups": { "type": "array", "items": { "type": "string" }, "description": "Protected demographic groups for bias testing" }, "biasScores": { "type": "object", "description": "Bias scores per protected group" } }, "additionalProperties": true },
+          "sampleQueries": { "type": "array", "items": { "type": "object", "properties": { "query": { "type": "string" }, "expectedAnswer": { "type": "string" }, "relevanceScore": { "type": "number", "minimum": 0, "maximum": 1 } }, "required": ["query", "expectedAnswer"] }, "description": "Sample queries with expected answers", "minItems": 1 },
+          "freshnessPolicyDays": { "type": "number", "description": "Knowledge freshness policy in days (default: 90)", "minimum": 1, "maximum": 3650, "default": 90 }
+        },
+        "required": ["modelId", "vectorDbConfig", "sampleQueries"],
+        "additionalProperties": false
+      }
+    },
+    {
+      "name": "audit_prompt_templates",
+      "description": "Audits prompt templates for injection surface, few-shot bias, instruction safety. EU AI Act Art. 10, 13 | NIST AI RMF GOVERN 1.2 | ISO/IEC 42001 Clause 8.1.3",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "modelId": { "type": "string", "description": "Unique model identifier", "minLength": 1, "maxLength": 255, "pattern": "^[a-zA-Z0-9][a-zA-Z0-9._-]*$" },
+          "promptTemplates": { "type": "array", "items": { "type": "object", "properties": { "name": { "type": "string", "minLength": 1 }, "template": { "type": "string", "minLength": 1 }, "role": { "type": "string", "enum": ["system", "user", "assistant"] }, "use_case": { "type": "string" } }, "required": ["name", "template", "role"] }, "description": "Prompt templates to audit", "minItems": 1 },
+          "fewShotExamples": { "type": "array", "items": { "type": "object", "properties": { "input": { "type": "string" }, "output": { "type": "string" } }, "required": ["input", "output"] }, "description": "Few-shot examples to check for bias" },
+          "systemPrompt": { "type": "string", "description": "System prompt to audit", "maxLength": 50000 }
+        },
+        "required": ["modelId", "promptTemplates"],
+        "additionalProperties": false
+      }
+    },
+    {
+      "name": "audit_agent_trust",
+      "description": "Audits multi-agent trust: identity verification, P2P integrity, collusion detection. EU AI Act Art. 12, 14 | NIST GOVERN 1.2 | DPDP Act Sec. 8 | ISO/IEC 42001 Clause 7.4.3",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "modelId": { "type": "string", "description": "Unique model identifier", "minLength": 1, "maxLength": 255, "pattern": "^[a-zA-Z0-9][a-zA-Z0-9._-]*$" },
+          "agents": { "type": "array", "items": { "type": "object", "properties": { "agentId": { "type": "string", "minLength": 1 }, "role": { "type": "string" }, "capabilities": { "type": "array", "items": { "type": "string" } }, "tools": { "type": "array", "items": { "type": "string" } }, "hasIdentity": { "type": "boolean" }, "hasSignature": { "type": "boolean" } }, "required": ["agentId", "role"] }, "description": "Agent configurations to audit", "minItems": 1 },
+          "messageBusConfig": { "type": "object", "description": "Message bus configuration (hmac, signing, authentication)", "properties": { "hmac": { "type": "boolean", "description": "Whether HMAC is enforced on messages" }, "signing": { "type": "boolean", "description": "Whether messages are cryptographically signed" }, "authentication": { "type": "string", "enum": ["none", "api_key", "mtls", "oauth"], "description": "Authentication mechanism" } }, "additionalProperties": true },
+          "p2pEnabled": { "type": "boolean", "description": "Whether P2P agent communication is enabled", "default": false }
+        },
+        "required": ["modelId", "agents"],
+        "additionalProperties": false
+      }
+    },
+    {
+      "name": "audit_tool_permissions",
+      "description": "Audits tool permission boundaries: privilege escalation, unauthorized access, permission drift. DPDP Act Sec. 8 | EU AI Act Art. 14 | GDPR Art. 25 | ISO/IEC 42001 Clause 7.4.3",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "modelId": { "type": "string", "description": "Unique model identifier", "minLength": 1, "maxLength": 255, "pattern": "^[a-zA-Z0-9][a-zA-Z0-9._-]*$" },
+          "toolRegistry": { "type": "array", "items": { "type": "object", "properties": { "toolName": { "type": "string", "minLength": 1 }, "permissions": { "type": "array", "items": { "type": "string" } }, "agents": { "type": "array", "items": { "type": "string" } }, "scopes": { "type": "array", "items": { "type": "string" } }, "lastAuditedPermissions": { "type": "array", "items": { "type": "string" } } }, "required": ["toolName", "permissions", "agents"] }, "description": "Tool registry with permissions", "minItems": 1 },
+          "accessLogs": { "type": "array", "items": { "type": "object", "properties": { "timestamp": { "type": "string" }, "agentId": { "type": "string" }, "toolName": { "type": "string" }, "action": { "type": "string" }, "result": { "type": "string", "enum": ["success", "denied", "error"] }, "scope": { "type": "string" } }, "required": ["timestamp", "agentId", "toolName", "action", "result"] }, "description": "Access logs to audit", "minItems": 1 }
+        },
+        "required": ["modelId", "toolRegistry", "accessLogs"],
+        "additionalProperties": false
+      }
+    },
+    {
+      "name": "classify_agent_autonomy",
+      "description": "Classifies agent autonomy level and maps to EU AI Act risk tiers. BLOCKER FAIL for fully autonomous agents. EU AI Act Art. 6, 14 | NIST AI RMF GOVERN 3.2 | ISO/IEC 42001 Clause 6.1",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "modelId": { "type": "string", "description": "Unique model identifier", "minLength": 1, "maxLength": 255, "pattern": "^[a-zA-Z0-9][a-zA-Z0-9._-]*$" },
+          "agentType": { "type": "string", "enum": ["single", "multi_agent", "hierarchical", "swarm"], "description": "Type of agent architecture" },
+          "hasHumanOversight": { "type": "boolean", "description": "Does the agent have human oversight?" },
+          "canMakeDecisions": { "type": "boolean", "description": "Can the agent make autonomous decisions?" },
+          "canModifyEnvironment": { "type": "boolean", "description": "Can the agent modify its environment?", "default": false },
+          "canDelegateTasks": { "type": "boolean", "description": "Can the agent delegate tasks to other agents?", "default": false },
+          "canAccessExternalAPIs": { "type": "boolean", "description": "Can the agent access external APIs?", "default": false },
+          "canSelfModify": { "type": "boolean", "description": "Can the agent modify its own prompts/weights?", "default": false },
+          "deploymentContext": { "type": "string", "enum": ["real_time", "batch", "assistive", "autonomous"], "description": "Deployment context", "default": "assistive" }
+        },
+        "required": ["modelId", "agentType", "hasHumanOversight", "canMakeDecisions"],
+        "additionalProperties": false
       }
     },
     {
       "name": "assess_dpdp_compliance",
-      "description": "India DPDP Act 2023 compliance assessment (Sec. 5-14)",
+      "description": "India DPDP Act 2023 compliance assessment (Sec. 5-30). DPDP Act 2023 | ISO/IEC 42001 Clause 6.2",
       "inputSchema": {
         "type": "object",
-        "required": ["modelId", "dataFiduciary"]
+        "properties": {
+          "modelId": { "type": "string", "description": "Unique model identifier", "minLength": 1, "maxLength": 255, "pattern": "^[a-zA-Z0-9][a-zA-Z0-9._-]*$" },
+          "dataFiduciary": { "type": "string", "description": "Name/entity of the Data Fiduciary (Sec. 3(8))", "minLength": 1, "maxLength": 500 },
+          "consentMechanism": { "type": "string", "enum": ["explicit", "implied", "opt_out", "none"], "description": "Consent mechanism (Sec. 5/6)" },
+          "dataPrincipalRights": { "type": "array", "items": { "type": "string", "enum": ["access", "correction", "erasure", "grievance_redressal", "nomination"] }, "minItems": 1, "description": "Data principal rights (Sec. 11-14)" },
+          "processingPurpose": { "type": "string", "description": "Lawful purpose of processing (Sec. 7)", "minLength": 1 },
+          "dataLocalization": { "type": "boolean", "description": "Data stored only in India (Sec. 16)" },
+          "crossBorderTransfer": { "type": "boolean", "description": "Cross-border transfer permitted (Sec. 16)" },
+          "transferCountries": { "type": "array", "items": { "type": "string" }, "description": "Countries data transferred to (Sec. 16)" },
+          "hasDataProtectionOfficer": { "type": "boolean", "description": "DPO appointed (Sec. 8(9))" },
+          "hasPrivacyPolicy": { "type": "boolean", "description": "Privacy policy published (Sec. 8(7))" },
+          "hasBreachNotification": { "type": "boolean", "description": "Breach notification exists (Sec. 8(6))" },
+          "breachNotificationHours": { "type": "number", "minimum": 1, "maximum": 720, "description": "Breach notification timeline (Sec. 8(6))" },
+          "hasChildProtection": { "type": "boolean", "description": "Child data protection (Sec. 9)" },
+          "hasSignificantDataFiduciaryObligations": { "type": "boolean", "description": "SDF obligations met (Sec. 10)" },
+          "processingRecords": { "type": "boolean", "description": "Processing records maintained (Sec. 8(7))" },
+          "dataRetentionDays": { "type": "number", "minimum": 1, "description": "Data retention period in days (Sec. 8(7))" },
+          "hasConsentRecords": { "type": "boolean", "description": "Consent records maintained (Sec. 8(8))" },
+          "hasAuditTrail": { "type": "boolean", "description": "Audit trail maintained (Sec. 8(7))" }
+        },
+        "required": ["modelId", "dataFiduciary", "consentMechanism"],
+        "additionalProperties": false
       }
+    }
+  ],
+  "resources": [
+    {
+      "uri": "compliance://frameworks/eu-ai-act",
+      "name": "EU AI Act (Regulation 2024/1689)",
+      "description": "EU AI Act risk classification framework. Art. 5 (prohibited), Art. 6 + Annex III (high-risk), Art. 50 (transparency).",
+      "mimeType": "application/json"
+    },
+    {
+      "uri": "compliance://frameworks/gdpr",
+      "name": "GDPR (Regulation 2016/679)",
+      "description": "GDPR compliance framework. Art. 5 (principles), Art. 9 (special categories), Art. 22 (automated decisions), Art. 25 (privacy by design), Art. 30 (ROPA), Art. 35 (DPIA), Art. 44-49 (cross-border transfers).",
+      "mimeType": "application/json"
+    },
+    {
+      "uri": "compliance://frameworks/nist-ai-rmf",
+      "name": "NIST AI RMF (AI 100-1)",
+      "description": "NIST AI Risk Management Framework. GOVERN 1.2/3.2, MAP 1.1, MEASURE 1.3/2.2/3.3/4.1.",
+      "mimeType": "application/json"
+    },
+    {
+      "uri": "compliance://frameworks/iso-42001",
+      "name": "ISO/IEC 42001:2023",
+      "description": "AI Management System standard. Clauses 6.1, 6.2, 7.4.3, 7.5, 8.1.2, 8.1.3, 8.2, 9.1.",
+      "mimeType": "application/json"
+    },
+    {
+      "uri": "compliance://frameworks/dpdp-act",
+      "name": "India DPDP Act 2023",
+      "description": "Digital Personal Data Protection Act. Sec. 5/6 (consent), Sec. 8 (fiduciary duties), Sec. 11-14 (data principal rights).",
+      "mimeType": "application/json"
+    }
+  ],
+  "prompts": [
+    {
+      "name": "full-model-audit",
+      "description": "Run a complete 17-phase compliance audit on an AI model across all five regulatory frameworks",
+      "arguments": [
+        { "name": "modelId", "description": "Unique model identifier to audit", "required": true },
+        { "name": "modelType", "description": "EU AI Act model category", "required": true },
+        { "name": "sector", "description": "Deployment sector", "required": true },
+        { "name": "dataController", "description": "Data controller name for GDPR DPIA", "required": true },
+        { "name": "dpoName", "description": "Data Protection Officer name", "required": true }
+      ]
+    },
+    {
+      "name": "dpdp-quick-check",
+      "description": "Quick India DPDP Act 2023 compliance assessment",
+      "arguments": [
+        { "name": "modelId", "description": "Model identifier to assess", "required": true },
+        { "name": "dataFiduciary", "description": "Name of the Data Fiduciary", "required": true }
+      ]
+    },
+    {
+      "name": "agent-trust-audit",
+      "description": "Audit multi-agent system trust boundaries, tool permissions, and autonomy classification",
+      "arguments": [
+        { "name": "modelId", "description": "Model/agent system identifier", "required": true },
+        { "name": "agentCount", "description": "Number of agents in the system", "required": true },
+        { "name": "hasHumanOversight", "description": "Whether human oversight is in place", "required": true }
+      ]
+    },
+    {
+      "name": "risk-classify-only",
+      "description": "Classify a model's EU AI Act risk tier without running the full audit pipeline",
+      "arguments": [
+        { "name": "modelId", "description": "Model identifier", "required": true },
+        { "name": "modelType", "description": "EU AI Act model category", "required": true },
+        { "name": "sector", "description": "Deployment sector", "required": true }
+      ]
     }
   ]
 }
