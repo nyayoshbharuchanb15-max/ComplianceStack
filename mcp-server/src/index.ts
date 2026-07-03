@@ -115,7 +115,7 @@ const TOOLS = [
           description: "Category of the AI system per EU AI Act Annex III",
         },
         sector: {
-          type": "string",
+          type: "string",
           enum: ["healthcare", "finance", "criminal_justice", "employment", "education", "critical_infrastructure", "other"],
           description: "Deployment sector for risk context",
         },
@@ -155,7 +155,7 @@ const TOOLS = [
       properties: {
         modelId: { type: "string", description: "Unique model identifier" },
         hasHumanInTheLoop: { type: "boolean", description: "Does the system support HITL review?" },
-        hasKillSwitch: { type": "boolean", description: "Does the system have a physical/software kill-switch?" },
+        hasKillSwitch: { type: "boolean", description: "Does the system have a physical/software kill-switch?" },
         oversightProcess: {
           type: "string",
           description: "Description of the human oversight process in place",
@@ -190,7 +190,7 @@ const TOOLS = [
           description: "List of protected attributes to test (e.g. ['race', 'gender', 'age'])",
         },
         fairnessThreshold: {
-          type": "number",
+          type: "number",
           description: "Disparate impact ratio threshold (default: 0.8 per 80% rule)",
           default: 0.8,
         },
@@ -205,7 +205,7 @@ const TOOLS = [
       "Evaluates cross-border transfer mechanisms (Art. 44–49) and adequacy decisions. " +
       "🔗 GDPR Art. 5, 9, 22, 35, 44–49 | ISO/IEC 42001 Clause 6.2",
     inputSchema: {
-      type": "object",
+      type: "object",
       properties: {
         modelId: { type: "string", description: "Unique model identifier" },
         dataController: { type: "string", description: "Name/entity of the data controller" },
@@ -283,7 +283,7 @@ const TOOLS = [
           description: "Supply chain audit result from audit_supply_chain",
         },
         oversight: {
-          type": "object",
+          type: "object",
           properties: {
             blocker: { type: "boolean" },
             compliant: { type: "boolean" },
@@ -293,7 +293,7 @@ const TOOLS = [
         bias: {
           type: "object",
           properties: {
-            overallBiasRisk: { type": "string" },
+            overallBiasRisk: { type: "string" },
             compliant: { type: "boolean" },
           },
           description: "Bias assessment result from run_bias_assessment",
@@ -309,7 +309,7 @@ const TOOLS = [
           type: "object",
           properties: {
             overallRisk: { type: "string" },
-            compliant: { type": "boolean" },
+            compliant: { type: "boolean" },
           },
           description: "Adversarial test result from run_adversarial_tests",
         },
@@ -333,7 +333,7 @@ const TOOLS = [
           enum: ["prohibited", "high", "limited", "minimal", "certified"],
           description: "Final risk tier or certification level",
         },
-        compliant: { type": "boolean", description: "Overall compliance status" },
+        compliant: { type: "boolean", description: "Overall compliance status" },
         issuerName: { type: "string", description: "Name of the issuing authority" },
         validDays: {
           type: "number",
@@ -353,7 +353,7 @@ const TOOLS = [
     inputSchema: {
       type: "object",
       properties: {
-        modelId: { type": "string", description: "Unique model identifier" },
+        modelId: { type: "string", description: "Unique model identifier" },
         referenceData: {
           type: "array",
           items: { type: "object" },
@@ -458,7 +458,7 @@ const TOOLS = [
           description: "Array of prompt templates to audit [{name, template, role, use_case}]",
         },
         fewShotExamples: {
-          type": "array",
+          type: "array",
           items: { type: "object" },
           description: "Few-shot examples to check for bias (optional)",
         },
@@ -487,7 +487,7 @@ const TOOLS = [
         },
         messageBusConfig: {
           type: "object",
-n          description: "Message bus configuration (hmac, signing, authentication)",
+          description: "Message bus configuration (hmac, signing, authentication)",
         },
         p2pEnabled: {
           type: "boolean",
@@ -507,7 +507,7 @@ n          description: "Message bus configuration (hmac, signing, authenticatio
     inputSchema: {
       type: "object",
       properties: {
-        modelId: { type type: "string", description: "Unique model identifier" },
+        modelId: { type: "string", description: "Unique model identifier" },
         toolRegistry: {
           type: "array",
           items: { type: "object" },
@@ -662,7 +662,7 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
           "/api/adversarial/run",
           { body: args },
         );
-        return formatStatus(result, "Adversarial Test Report");
+        return formatSuccess(result, "Adversarial Test Report");
       }
 
       // ── Tool 8: score_audit_weighted ───────────────────────────
@@ -681,9 +681,7 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
               },
               {
                 type: "text",
-                text: `🛑 CERTIFICATION HALTED: ${result.blockerFailures.length} blocker failure(s) detected.\n"
-                  + "Blocker(s): ${result.blockerFailures.join(", ")}\n"
-                  + "Resolution required before certification can proceed.",
+                text: `🛑 CERTIFICATION HALTED: ${result.blockerFailures.length} blocker failure(s) detected.\nBlocker(s): ${result.blockerFailures.join(", ")}\nResolution required before certification can proceed.`,
               },
             ],
             isError: true,
@@ -821,7 +819,7 @@ async function main() {
         status: "ok",
         transport: "sse",
         sessionCount: transports.size,
-        version: "1.0.0",
+        version: "2.0.0",
       });
     });
 
