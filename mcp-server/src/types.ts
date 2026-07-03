@@ -1,4 +1,4 @@
-// ─── AI Governance MCP Server — Shared Types ──────────────────────
+// ─── ComplianceStack MCP Server — Shared Types ──────────────────────
 // ISO/IEC 42001:2023 Clause 6.3 — All audit artifacts are versioned
 // and traceable to regulatory frameworks.
 

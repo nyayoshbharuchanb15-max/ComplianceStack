@@ -1,5 +1,5 @@
 # ═══════════════════════════════════════════════════════════════════
-#  AI Governance MCP Server — CI/CD Pipeline
+#  ComplianceStack — CI/CD Pipeline
 #  Runs tests, linting, and builds for both Python backend
 #  and TypeScript MCP server on every push and PR.
 # ═══════════════════════════════════════════════════════════════════

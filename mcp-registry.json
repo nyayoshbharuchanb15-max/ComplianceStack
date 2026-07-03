@@ -1,8 +1,8 @@
 {
-  "name": "ai-governance-mcp-server",
+  "name": "compliance-stack-mcp-server",
   "version": "2.0.0",
-  "displayName": "AI Governance MCP Server",
-  "description": "On-premise AI compliance auditing via Model Context Protocol. Audits AI models against EU AI Act, NIST AI RMF, ISO/IEC 42001, GDPR, and India DPDP Act with a 9-phase pipeline. Issues W3C Verifiable Credentials.",
+  "displayName": "ComplianceStack MCP Server",
+  "description": "Enterprise-grade AI compliance and governance platform with zero-data-egress auditing. Audits AI models against EU AI Act, NIST AI RMF, ISO/IEC 42001, GDPR, and India DPDP Act with a 17-phase pipeline. Issues W3C Verifiable Credentials.",
   "author": {
     "name": "Nyayosh Bharuchanb15-Max",
     "url": "https://github.com/nyayoshbharuchanb15-max"
@@ -10,14 +10,15 @@
   "license": "dual-commercial",
   "repository": {
     "type": "git",
-    "url": "https://github.com/nyayoshbharuchanb15-max/AI-GOVERNANCE.git"
+    "url": "https://github.com/nyayoshbharuchanb15-max/ComplianceStack.git"
   },
-  "homepage": "https://github.com/nyayoshbharuchanb15-max/AI-GOVERNANCE",
+  "homepage": "https://github.com/nyayoshbharuchanb15-max/ComplianceStack",
   "keywords": [
     "mcp",
     "model-context-protocol",
     "ai-governance",
     "ai-compliance",
+    "enterprise-compliance",
     "eu-ai-act",
     "gdpr",
     "nist-ai-rmf",
@@ -31,7 +32,8 @@
     "risk-classification",
     "drift-detection",
     "data-protection",
-    "compliance"
+    "compliance",
+    "zero-data-egress"
   ],
   "categories": [
     "security",

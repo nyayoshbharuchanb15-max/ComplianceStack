@@ -1,5 +1,5 @@
 // ═══════════════════════════════════════════════════════════════════
-//  AI Governance MCP Server — Complete Implementation
+//  ComplianceStack MCP Server — Complete Implementation
 //  Exposes 17 audit tools via the Model Context Protocol SDK.
 //  Connected to Python FastAPI Backend for all audit logic.
 //  ================================================================
@@ -49,7 +49,7 @@ function formatSuccess(result: unknown, label: string) {
 
 const server = new Server(
   {
-    name: "ai-governance-mcp-server",
+    name: "compliance-stack-mcp-server",
     version: "2.0.0",
   },
   {
@@ -555,20 +555,6 @@ n          description: "Message bus configuration (hmac, signing, authenticatio
   },
 ];
 
-// ─── MCP Server Connection ─────────────────────────────────────────
-
-const server = new Server(
-  {
-    name: "ai-governance-mcp-server",
-    version: "2.0.0",
-  },
-  {
-    capabilities: {
-      tools: {},
-    },
-  },
-);
-
 // ─── Handler: List Available Tools ───────────────────────────────
 
 server.setRequestHandler(ListToolsRequestSchema, async () => ({
@@ -587,8 +573,7 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
   if (!args) {
     return {
       content: [{ type: "text", text: "Error: No arguments provided." }],
-      isError
-TypeError: Cannot read property 'isError' of undefined
+      isError: true,
     };
   }
 
@@ -860,17 +845,17 @@ async function main() {
 
     const port = parseInt(process.env.PORT || "3000", 10);
     app.listen(port, () => {
-      console.error(`[AI Governance MCP] SSE transport listening on port ${port}`);
+      console.error(`[ComplianceStack MCP] SSE transport listening on port ${port}`);
     });
   } else {
     // Stdio Transport: used for Claude Desktop and direct CLI integration
     const transport = new StdioServerTransport();
-    console.error("[AI Governance MCP] Starting with stdio transport...");
+    console.error("[ComplianceStack MCP] Starting with stdio transport...");
     await server.connect(transport);
   }
 }
 
 main().catch((error) => {
-  console.error("[AI Governance MCP] Fatal error:", error);
+  console.error("[ComplianceStack MCP] Fatal error:", error);
   process.exit(1);
 });

@@ -1,17 +1,17 @@
 {
-  "name": "ai-governance-mcp-server",
+  "name": "compliance-stack",
   "version": "2.0.0",
   "private": true,
-  "description": "AI Governance MCP Server — On-premise enterprise compliance auditing for AI models",
+  "description": "ComplianceStack — Enterprise AI governance platform with zero-data-egress auditing",
   "author": "Nyayosh Bharuchanb15-Max",
   "license": "SEE LICENSE IN LICENSE.md",
   "repository": {
     "type": "git",
-    "url": "https://github.com/nyayoshbharuchanb15-max/AI-GOVERNANCE.git"
+    "url": "https://github.com/nyayoshbharuchanb15-max/ComplianceStack.git"
   },
-  "homepage": "https://github.com/nyayoshbharuchanb15-max/AI-GOVERNANCE#readme",
+  "homepage": "https://github.com/nyayoshbharuchanb15-max/ComplianceStack#readme",
   "bugs": {
-    "url": "https://github.com/nyayoshbharuchanb15-max/AI-GOVERNANCE/issues"
+    "url": "https://github.com/nyayoshbharuchanb15-max/ComplianceStack/issues"
   },
   "workspaces": ["mcp-server"]
 }

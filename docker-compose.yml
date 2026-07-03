@@ -18,7 +18,7 @@ services:
   # ─── PostgreSQL Evidence Store ──────────────────────────────────
   postgres:
     image: postgres:16-alpine
-    container_name: ai-governance-postgres
+    container_name: compliance-stack-postgres
     restart: unless-stopped
     environment:
       POSTGRES_USER: ${POSTGRES_USER:-governance}
@@ -39,7 +39,7 @@ services:
   # ─── Neo4j Provenance Graph ────────────────────────────────────
   neo4j:
     image: neo4j:5-community
-    container_name: ai-governance-neo4j
+    container_name: compliance-stack-neo4j
     restart: unless-stopped
     environment:
       # ╔════════════════════════════════════════════════════════════╗
@@ -64,7 +64,7 @@ services:
   # ─── Redis Async Engine ─────────────────────────────────────────
   redis:
     image: redis:7-alpine
-    container_name: ai-governance-redis
+    container_name: compliance-stack-redis
     restart: unless-stopped
     ports:
       - "6379:6379"
@@ -82,7 +82,7 @@ services:
     build:
       context: ./python-backend
       dockerfile: Dockerfile
-    container_name: ai-governance-python
+    container_name: compliance-stack-python
     restart: unless-stopped
     depends_on:
       postgres:
@@ -139,7 +139,7 @@ services:
     build:
       context: ./mcp-server
       dockerfile: Dockerfile
-    container_name: ai-governance-mcp
+    container_name: compliance-stack-mcp
     restart: unless-stopped
     depends_on:
       python-backend:
@@ -170,7 +170,7 @@ services:
     build:
       context: ./website
       dockerfile: Dockerfile
-    container_name: ai-governance-webui
+    container_name: compliance-stack-webui
     restart: unless-stopped
     ports:
       - "8080:8080"

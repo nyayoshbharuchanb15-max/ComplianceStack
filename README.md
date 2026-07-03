@@ -28,7 +28,7 @@ An **enterprise-grade AI governance platform** that provides zero-data-egress co
 
 ```
 ┌──────────────────────┐     ┌──────────────────────────────────────────────┐
-│   AI Assistant       │     │         AI Governance MCP Server             │
+│   AI Assistant       │     │         ComplianceStack MCP Server           │
 │  (Claude Desktop,    │◄───►│                                              │
 │   Cursor, etc.)      │     │  TypeScript MCP Server        Python Backend │
 │                      │     │  ┌──────────────────┐     ┌───────────────┐  │
@@ -107,7 +107,7 @@ Add to `claude_desktop_config.json`:
   "mcpServers": {
     "compliance-stack": {
       "command": "docker",
-      "args": ["exec", "-i", "ai-governance-mcp", "node", "dist/index.js"],
+      "args": ["exec", "-i", "compliance-stack-mcp", "node", "dist/index.js"],
       "env": { "PYTHON_BACKEND_URL": "http://python-backend:8000" }
     }
   }
