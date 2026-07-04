@@ -15,21 +15,21 @@
 [![GDPR](https://img.shields.io/badge/GDPR-compliant-blue)](https://gdpr.eu/)
 [![ISO 42001](https://img.shields.io/badge/ISO%2FIEC%2042001-compliant-purple)](https://www.iso.org/standard/81230.html)
 
-[Quick Start](#-quick-start) | [Features](#-features) | [17-Phase Pipeline](#17-phase-audit-pipeline) | [Contributing](./CONTRIBUTING.md)
+[Quick Install](#quick-install) | [Features](#features) | [17-Phase Pipeline](#17-phase-audit-pipeline) | [API](#api-reference) | [Contributing](./CONTRIBUTING.md)
 
 </div>
 
 ---
 
-## Quick Start
+## Quick Install
 
-### Option 1: npx (Recommended)
+### Option 1: npx (Recommended, requires Node 20+)
 
 ```bash
 npx compliance-stack-mcp-server
 ```
 
-Add to your MCP client (Claude Desktop, Cursor, Windsurf):
+Add to your MCP client:
 
 ```json
 {
@@ -42,7 +42,7 @@ Add to your MCP client (Claude Desktop, Cursor, Windsurf):
 }
 ```
 
-### Option 2: Docker
+### Option 2: Docker (Full stack)
 
 ```bash
 git clone https://github.com/nyayoshbharuchanb15-max/ComplianceStack.git
@@ -92,37 +92,6 @@ ComplianceStack is a **17-phase audit pipeline** that plugs directly into your A
 
 ## Features
 
-### Regulatory Coverage
-
-| Framework | Articles/Clauses | What We Audit |
-|-----------|-----------------|---------------|
-| **EU AI Act** (Reg. 2024/1689) | Art. 5, 6, 10, 12, 14, 15, Annex I–III | Risk classification, supply chain, human oversight, bias, adversarial robustness |
-| **NIST AI RMF** (AI 100-1) | MAP 1.1, GOVERN 1.2, 3.2, MEASURE 1.3, 2.2, 3.3, 4.1 | Risk mapping, governance, measurement, drift monitoring |
-| **ISO/IEC 42001:2023** | Clauses 6.1, 6.2, 7.4.3, 7.5, 8.1.2, 8.1.3, 8.2, 9.1 | AIMS compliance, documented information, monitoring |
-| **GDPR** (Reg. 2016/679) | Art. 5, 9, 22, 25, 30, 35, 44–49 | DPIA, ROPA, DSAR, cross-border transfers |
-| **India DPDP Act 2023** | Sec. 5–14 | Consent, fiduciary duties, data principal rights |
-
-### 17-Phase Audit Pipeline
-
-| Phase | Tool | What It Does |
-|-------|------|-------------|
-| 1 | `classify_ai_risk` | EU AI Act risk tier classification (Prohibited → Minimal) |
-| 2 | `discover_supply_chain` | Filesystem crawler populates Neo4j provenance graph |
-| 3 | `audit_supply_chain` | Neo4j graph query for data lineage & IP clearance |
-| 4 | `verify_human_oversight` | HITL/kill-switch verification (BLOCKER FAIL if missing) |
-| 5 | `run_bias_assessment` | Fairlearn metrics: demographic parity, equal opportunity, disparate impact |
-| 6 | `generate_dpia` | GDPR Art. 35 DPIA with cross-border transfer analysis |
-| 7 | `run_adversarial_tests` | Prompt injection, jailbreak, OOD, model inversion, membership inference |
-| 8 | `score_audit_weighted` | Aggregate score (0–100), BLOCKER FAIL halts certification |
-| 9 | `generate_audit_certificate` | W3C Verifiable Credential (Ed25519-signed) issued |
-| 10 | `monitor_model_drift` | Evidently AI drift detection, auto re-audit via Redis Streams |
-| 11 | `audit_session_memory` | STM/LTM isolation, context window limits, wipe-on-expiry |
-| 12 | `audit_rag_quality` | Retrieval accuracy, embedding bias, freshness, hallucination rate |
-| 13 | `audit_prompt_templates` | Injection surface, few-shot bias, instruction safety |
-| 14 | `audit_agent_trust` | Agent identity, P2P integrity, collusion detection |
-| 15 | `audit_tool_permissions` | Privilege escalation, unauthorized access, permission drift |
-| 16 | `classify_agent_autonomy` | Assistive → Fully Autonomous classification (BLOCKER if uncontrolled) |
-
 ### Architecture
 
 ```
@@ -150,6 +119,37 @@ ComplianceStack is a **17-phase audit pipeline** that plugs directly into your A
 └──────────────────────┘
 ```
 
+### 17-Phase Audit Pipeline
+
+| Phase | Tool | What It Does |
+|-------|------|-------------|
+| 1 | `classify_ai_risk` | EU AI Act risk tier classification (Prohibited → Minimal) |
+| 2 | `discover_supply_chain` | Filesystem crawler populates Neo4j provenance graph |
+| 3 | `audit_supply_chain` | Neo4j graph query for data lineage & IP clearance |
+| 4 | `verify_human_oversight` | HITL/kill-switch verification (BLOCKER FAIL if missing) |
+| 5 | `run_bias_assessment` | Fairlearn metrics: demographic parity, equal opportunity, disparate impact |
+| 6 | `generate_dpia` | GDPR Art. 35 DPIA with cross-border transfer analysis |
+| 7 | `run_adversarial_tests` | Prompt injection, jailbreak, OOD, model inversion, membership inference |
+| 8 | `score_audit_weighted` | Aggregate score (0–100), BLOCKER FAIL halts certification |
+| 9 | `generate_audit_certificate` | W3C Verifiable Credential (Ed25519-signed) issued |
+| 10 | `monitor_model_drift` | Evidently AI drift detection, auto re-audit via Redis Streams |
+| 11 | `audit_session_memory` | STM/LTM isolation, context window limits, wipe-on-expiry |
+| 12 | `audit_rag_quality` | Retrieval accuracy, embedding bias, freshness, hallucination rate |
+| 13 | `audit_prompt_templates` | Injection surface, few-shot bias, instruction safety |
+| 14 | `audit_agent_trust` | Agent identity, P2P integrity, collusion detection |
+| 15 | `audit_tool_permissions` | Privilege escalation, unauthorized access, permission drift |
+| 16 | `classify_agent_autonomy` | Assistive → Fully Autonomous classification (BLOCKER if uncontrolled) |
+
+### Regulatory Coverage
+
+| Framework | Articles/Clauses | What We Audit |
+|-----------|-----------------|---------------|
+| **EU AI Act** (Reg. 2024/1689) | Art. 5, 6, 10, 12, 14, 15, Annex I–III | Risk classification, supply chain, human oversight, bias, adversarial robustness |
+| **NIST AI RMF** (AI 100-1) | MAP 1.1, GOVERN 1.2, 3.2, MEASURE 1.3, 2.2, 3.3, 4.1 | Risk mapping, governance, measurement, drift monitoring |
+| **ISO/IEC 42001:2023** | Clauses 6.1, 6.2, 7.4.3, 7.5, 8.1.2, 8.1.3, 8.2, 9.1 | AIMS compliance, documented information, monitoring |
+| **GDPR** (Reg. 2016/679) | Art. 5, 9, 22, 25, 30, 35, 44–49 | DPIA, ROPA, DSAR, cross-border transfers |
+| **India DPDP Act 2023** | Sec. 5–14 | Consent, fiduciary duties, data principal rights |
+
 ---
 
 ## External Service Configuration
@@ -176,34 +176,11 @@ By default, ComplianceStack operates with **zero data egress** — all operation
 
 ---
 
-## Quick Start
-
-### Prerequisites
-
-- Docker 24+ and Docker Compose v2
-- Git
-
-### 1. Clone and Start
-
-```bash
-git clone https://github.com/nyayoshbharuchanb15-max/ComplianceStack.git
-cd ComplianceStack
-cp .env.example .env
-docker compose up --build -d
-```
-
-### 2. Verify Services
-
-```bash
-curl http://localhost:8000/health
-# {"status":"ok","services":{"postgres":"connected","neo4j":"connected","redis":"connected","auth":"enabled"}}
-```
-
-### 3. Connect an MCP Client
+## MCP Client Configuration
 
 ComplianceStack supports **all three MCP transport modes**: stdio, SSE, and Streamable HTTP.
 
-#### Claude Desktop (Stdio)
+### Claude Desktop (Stdio)
 
 Add to `claude_desktop_config.json`:
 
@@ -219,7 +196,7 @@ Add to `claude_desktop_config.json`:
 }
 ```
 
-#### Cursor / Windsurf (SSE)
+### Cursor / Windsurf (SSE)
 
 ```json
 {
@@ -231,7 +208,7 @@ Add to `claude_desktop_config.json`:
 }
 ```
 
-#### Streamable HTTP (Modern MCP Clients)
+### Streamable HTTP (Modern MCP Clients)
 
 ```json
 {
@@ -246,7 +223,7 @@ Add to `claude_desktop_config.json`:
 
 Set `MCP_TRANSPORT=streamable-http` in your `.env` to enable the Streamable HTTP transport on port 3000.
 
-### 4. Run Your First Audit
+### Run Your First Audit
 
 Ask your AI assistant:
 
