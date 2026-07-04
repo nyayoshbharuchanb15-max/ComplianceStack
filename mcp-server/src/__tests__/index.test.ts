@@ -8,7 +8,8 @@ import {
   StreamableHTTPTransport,
   StreamableHTTPSessionManager,
 } from "../streamable-http-transport.js";
-import { ErrorCode, McpError } from "@modelcontextprotocol/sdk/types.js";
+import { ErrorCode } from "@modelcontextprotocol/sdk/types.js";
+import { McpError } from "../errors.js";
 
 // ═══════════════════════════════════════════════════════════════════
 //  1. Validator Tests

@@ -82,10 +82,11 @@ export class StreamableHTTPTransport implements Transport {
   async start(): Promise<void> {
     this._started = true;
     // Flush any messages queued before start
-    for (const msg of this._pendingMessages) {
+    const queued = this._pendingMessages;
+    this._pendingMessages = [];
+    for (const msg of queued) {
       await this.send(msg);
     }
-    this._pendingMessages = [];
   }
 
   async send(message: JSONRPCMessage): Promise<void> {
@@ -325,6 +326,7 @@ export class StreamableHTTPSessionManager {
    * Start periodic cleanup of expired sessions.
    */
   startCleanup(): void {
+    const checkInterval = Math.min(this._sessionTimeout, 60000);
     this._cleanupInterval = setInterval(() => {
       const now = Date.now();
       for (const [id, session] of this._sessions) {
@@ -333,7 +335,7 @@ export class StreamableHTTPSessionManager {
           this._sessions.delete(id);
         }
       }
-    }, 60000);
+    }, checkInterval);
   }
 
   /**

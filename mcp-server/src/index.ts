@@ -17,7 +17,6 @@ import {
   GetPromptRequestSchema,
   CancelledNotificationSchema,
   ErrorCode,
-  McpError,
 } from "@modelcontextprotocol/sdk/types.js";
 import express from "express";
 import { callPythonBackend } from "./client.js";
@@ -53,7 +52,6 @@ function mcpError(code: ErrorCode, message: string, data?: unknown): {
   content: Array<{ type: "text"; text: string }>;
   isError: true;
 } {
-  const error = new McpError(code, message, data);
   return {
     content: [{ type: "text", text: message }],
     isError: true as const,
