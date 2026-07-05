@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: Apache-2.0
+// Copyright 2026 Nyayosh Bharuchanb15-Max
+
 // ═══════════════════════════════════════════════════════════════════
 //  Streamable HTTP Transport — MCP Protocol Implementation
 //  Implements the MCP Streamable HTTP transport specification:

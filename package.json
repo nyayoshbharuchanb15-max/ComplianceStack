@@ -4,7 +4,7 @@
   "private": true,
   "description": "ComplianceStack — Enterprise AI governance platform with zero-data-egress auditing",
   "author": "Nyayosh Bharuchanb15-Max",
-  "license": "SEE LICENSE IN LICENSE.md",
+  "license": "Apache-2.0",
   "repository": {
     "type": "git",
     "url": "https://github.com/nyayoshbharuchanb15-max/ComplianceStack.git"

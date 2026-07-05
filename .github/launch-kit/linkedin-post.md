@@ -35,7 +35,7 @@ Traditional GRC tools are:
 ComplianceStack is:
 - Real-time feedback in your IDE
 - Completely on-premise
-- Open-source and free for non-commercial use
+- Open-source under the Apache 2.0 license
 - Integrated with modern AI development tools
 
 ### Technical highlights:

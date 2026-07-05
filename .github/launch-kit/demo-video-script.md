@@ -93,7 +93,7 @@ It issues W3C Verifiable Credentials for cryptographically signed audit certific
 [Screen: GitHub repository]
 
 **Narrator:**
-"ComplianceStack is open-source and free for non-commercial use.
+"ComplianceStack is open-source under the Apache 2.0 license.
 
 Star the repository on GitHub, try it out, and let us know what you think.
 

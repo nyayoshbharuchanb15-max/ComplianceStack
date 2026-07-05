@@ -1,3 +1,6 @@
+# SPDX-License-Identifier: Apache-2.0
+# Copyright 2026 Nyayosh Bharuchanb15-Max
+
 """
 DSAR Router — GDPR Art. 15–17 Data Subject Rights
 ───────────────────────────────────────────────────

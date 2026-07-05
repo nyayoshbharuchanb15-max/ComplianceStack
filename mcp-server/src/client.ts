@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: Apache-2.0
+// Copyright 2026 Nyayosh Bharuchanb15-Max
+
 // ─── Python Backend HTTP Client ──────────────────────────────────
 // Forwards all audit requests from the MCP server to the Python FastAPI
 // microservices. Supports authentication via Bearer tokens.

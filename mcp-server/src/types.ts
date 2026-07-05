@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: Apache-2.0
+// Copyright 2026 Nyayosh Bharuchanb15-Max
+
 // ─── ComplianceStack MCP Server — Shared Types ──────────────────────
 // ISO/IEC 42001:2023 Clause 6.3 — All audit artifacts are versioned
 // and traceable to regulatory frameworks.

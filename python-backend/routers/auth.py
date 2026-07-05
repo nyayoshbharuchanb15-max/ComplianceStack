@@ -1,3 +1,6 @@
+# SPDX-License-Identifier: Apache-2.0
+# Copyright 2026 Nyayosh Bharuchanb15-Max
+
 """
 Authentication Router — OAuth 2.1 Authorization Code Flow + PKCE
 ─────────────────────────────────────────────────────────────────

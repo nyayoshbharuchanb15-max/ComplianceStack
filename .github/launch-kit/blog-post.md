@@ -111,7 +111,7 @@ Then connect Claude Desktop and ask:
 
 ### Why Open Source?
 
-We believe AI governance should be accessible to everyone. Traditional GRC tools are expensive and proprietary. ComplianceStack is open-source and free for non-commercial use.
+We believe AI governance should be accessible to everyone. Traditional GRC tools are expensive and proprietary. ComplianceStack is open-source under the Apache 2.0 license.
 
 We want to build a community of contributors who are passionate about AI governance and responsible AI deployment.
 

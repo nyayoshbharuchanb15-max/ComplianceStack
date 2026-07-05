@@ -46,6 +46,6 @@ The Model Context Protocol allows AI assistants to directly invoke audit tools. 
 2. How do you handle compliance for local LLMs?
 3. Would you use this in production?
 
-The code is open-source (dual license - free for non-commercial use).
+The code is open-source under the Apache 2.0 license.
 
 Would love to get feedback from the HN community!

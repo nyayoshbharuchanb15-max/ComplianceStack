@@ -170,7 +170,7 @@ I've been working on **ComplianceStack** - an open-source AI compliance platform
 **Why this matters:**
 - AI regulation is here, and organizations need to comply
 - Traditional GRC tools are slow and expensive
-- This is open-source and free for non-commercial use
+- This is open-source under the Apache 2.0 license
 
 GitHub: https://github.com/nyayoshbharuchanb15-max/ComplianceStack
 

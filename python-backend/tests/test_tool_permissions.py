@@ -1,3 +1,6 @@
+# SPDX-License-Identifier: Apache-2.0
+# Copyright 2026 Nyayosh Bharuchanb15-Max
+
 """
 Tests: Tool Permission Audit (Phase E) — Privilege Escalation Detection
 """

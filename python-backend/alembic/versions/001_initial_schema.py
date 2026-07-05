@@ -1,3 +1,6 @@
+# SPDX-License-Identifier: Apache-2.0
+# Copyright 2026 Nyayosh Bharuchanb15-Max
+
 """
 Initial schema — audit_evidence, certificates, drift_alerts, users, auth_codes, pii_redactions
 

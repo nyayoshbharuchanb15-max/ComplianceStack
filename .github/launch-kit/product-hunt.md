@@ -18,7 +18,7 @@ ComplianceStack is a 17-phase audit pipeline that plugs directly into your AI as
 - **Zero Data Egress:** All operations run on-premise
 - **BLOCKER FAIL:** Prevents certification of non-compliant models
 - **W3C Verifiable Credentials:** Cryptographically signed audit certificates
-- **Open Source:** Free for non-commercial use
+- **Open Source:** Apache 2.0 license
 
 ### How It Works
 1. Clone the repo
@@ -72,7 +72,7 @@ The key differentiators:
 - **Real-time:** Get instant feedback in your IDE
 - **Private:** Zero data egress - everything runs on-premise
 - **Comprehensive:** 17 phases covering 5 regulatory frameworks
-- **Open Source:** Free for non-commercial use
+- **Open Source:** Apache 2.0 license
 
 I'd love to get your feedback! What regulatory frameworks would you like to see added next? How are you handling AI compliance in your organization?
 

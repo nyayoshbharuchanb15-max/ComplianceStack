@@ -3,7 +3,7 @@
   "version": "3.1.0",
   "description": "Enterprise AI compliance MCP server with zero-data-egress auditing across 5 regulatory frameworks (EU AI Act, GDPR, NIST AI RMF, ISO 42001, India DPDP). Exposes 17 tools, 5 resources, and 4 prompts via stdio/SSE/Streamable HTTP.",
   "author": "Nyayosh Bharuchanb15-Max",
-  "license": "SEE LICENSE IN LICENSE.md",
+  "license": "Apache-2.0",
   "repository": {
     "type": "git",
     "url": "https://github.com/nyayoshbharuchanb15-max/ComplianceStack.git",

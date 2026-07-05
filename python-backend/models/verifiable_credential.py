@@ -1,3 +1,6 @@
+# SPDX-License-Identifier: Apache-2.0
+# Copyright 2026 Nyayosh Bharuchanb15-Max
+
 """
 W3C Verifiable Credential Data Model 1.1
 ─────────────────────────────────────────

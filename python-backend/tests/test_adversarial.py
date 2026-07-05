@@ -1,3 +1,6 @@
+# SPDX-License-Identifier: Apache-2.0
+# Copyright 2026 Nyayosh Bharuchanb15-Max
+
 """
 Tests: Adversarial Robustness Tester (Phase 6) — LLM API + LLM-as-judge
 """

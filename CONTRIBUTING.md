@@ -224,6 +224,10 @@ pytest tests/ -m integration
 - Include examples in documentation
 - Keep CHANGELOG.md updated
 
+## NOTICE File & Attribution
+
+The repository contains a [NOTICE](./NOTICE) file at the root. **Do not delete or modify it** — Apache 2.0 requires all redistributors to include this file (or its contents) in their distribution. It serves as the primary attribution mechanism for this project. When forking, keep the NOTICE file intact.
+
 ## Community
 
 - **GitHub Issues**: For bug reports and feature requests

@@ -7,7 +7,7 @@
 **The first open-source MCP server that audits AI models against 5 regulatory frameworks in real-time.**
 
 [![CI](https://github.com/nyayoshbharuchanb15-max/ComplianceStack/actions/workflows/ci.yml/badge.svg)](https://github.com/nyayoshbharuchanb15-max/ComplianceStack/actions)
-[![License](https://img.shields.io/badge/license-dual--commercial-blue)](./LICENSE.md)
+[![License: Apache 2.0](https://img.shields.io/badge/License-Apache_2.0-blue.svg)](https://opensource.org/licenses/Apache-2.0)
 [![MCP Compatible](https://img.shields.io/badge/MCP-compatible-green)](https://modelcontextprotocol.io)
 [![Python 3.12](https://img.shields.io/badge/python-3.12-blue)](https://python.org)
 [![Node 20](https://img.shields.io/badge/node-20-green)](https://nodejs.org)
@@ -368,15 +368,13 @@ We welcome contributions! See [CONTRIBUTING.md](./CONTRIBUTING.md) for guideline
 
 ## License
 
-**Dual License** — Copyright © 2026 Nyayosh Bharuchanb15-Max.
+This project is licensed under the **Apache License, Version 2.0** — Copyright © 2026 Nyayosh Bharuchanb15-Max.
 
-| Use Case | License | Royalty |
-|----------|---------|---------|
-| Non-commercial (personal, academic, research, non-profit) | Free | None |
-| Commercial (under $500K revenue) | Starter | 5% of gross revenue |
-| Commercial ($500K+ revenue) | Enterprise | 10% of gross revenue |
+See [LICENSE](./LICENSE) for the full text, and [NOTICE](./NOTICE) for required attribution notices.
 
-See [LICENSE.md](./LICENSE.md) for complete terms.
+### Trademark & Naming
+
+The **ComplianceStack** name, logo, and branding are **not** covered by the Apache 2.0 license and may not be used to endorse or promote derived products without written permission. Forks and derivatives should use a different project name.
 
 ---
 

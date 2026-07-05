@@ -1,19 +1,5 @@
-AI Governance MCP Server
-Copyright (c) 2026 Nyayosh Bharuchanb15-Max
-All Rights Reserved.
+ComplianceStack
+Copyright 2026 Nyayosh Bharuchanb15-Max
 
-This software is provided under a dual-licensing model. See LICENSE.md
-for complete terms.
-
-For commercial licensing inquiries:
-  https://github.com/nyayoshbharuchanb15-max/AI-GOVERNANCE
-
-This product includes software developed by:
-  - The Fairlearn contributors (MIT License)
-  - The AIF360 contributors (Apache 2.0 License)
-  - The Evidently AI contributors (Apache 2.0 License)
-  - The @modelcontextprotocol/sdk contributors (MIT License)
-  - The FastAPI contributors (MIT License)
-
-Third-party dependencies and their licenses are listed in the
-respective package.json and requirements.txt files.
+This product includes software developed by Nyayosh Bharuchanb15-Max
+(https://github.com/nyayoshbharuchanb15-max/ComplianceStack).

@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: Apache-2.0
+// Copyright 2026 Nyayosh Bharuchanb15-Max
+
 // ═══════════════════════════════════════════════════════════════════
 //  Tool Input Validator — MCP-Layer JSON Schema Validation
 //  Uses ajv to validate all tool parameters against their JSON Schema
