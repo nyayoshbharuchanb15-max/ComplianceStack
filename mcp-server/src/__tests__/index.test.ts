@@ -10,6 +10,7 @@ import {
 } from "../streamable-http-transport.js";
 import { ErrorCode } from "@modelcontextprotocol/sdk/types.js";
 import { McpError } from "../errors.js";
+import { validateOrigin } from "../index.js";
 
 // ═══════════════════════════════════════════════════════════════════
 //  1. Validator Tests
@@ -463,5 +464,74 @@ describe("McpError", () => {
     );
     expect(error.code).toBe(ErrorCode.InvalidParams);
     expect(error.data).toEqual({ errors: ["field X is invalid"] });
+  });
+});
+
+// ═══════════════════════════════════════════════════════════════════
+//  Origin Validation Middleware Tests
+// ═══════════════════════════════════════════════════════════════════
+
+function mockReqRes(origin?: string) {
+  const req = { headers: { origin } } as any;
+  let statusCode: number | undefined;
+  let jsonBody: any;
+  const res = {
+    status(code: number) { statusCode = code; return this; },
+    json(body: any) { jsonBody = body; },
+  } as any;
+  const next = vi.fn();
+  return { req, res, next, get: () => ({ statusCode, jsonBody }) };
+}
+
+describe("validateOrigin", () => {
+  it("allows request with no Origin header (non-browser client)", () => {
+    const { req, res, next } = mockReqRes(undefined);
+    validateOrigin([])(req, res, next);
+    expect(next).toHaveBeenCalled();
+  });
+
+  it("allows request from http://localhost with any port", () => {
+    const { req, res, next } = mockReqRes("http://localhost:3000");
+    validateOrigin([])(req, res, next);
+    expect(next).toHaveBeenCalled();
+  });
+
+  it("allows request from http://127.0.0.1 with any port", () => {
+    const { req, res, next } = mockReqRes("http://127.0.0.1:8080");
+    validateOrigin([])(req, res, next);
+    expect(next).toHaveBeenCalled();
+  });
+
+  it("allows request from https://localhost", () => {
+    const { req, res, next } = mockReqRes("https://localhost:8443");
+    validateOrigin([])(req, res, next);
+    expect(next).toHaveBeenCalled();
+  });
+
+  it("rejects request from evil.example.com with 403", () => {
+    const { req, res, next, get } = mockReqRes("http://evil.example.com");
+    validateOrigin([])(req, res, next);
+    expect(next).not.toHaveBeenCalled();
+    const { statusCode, jsonBody } = get();
+    expect(statusCode).toBe(403);
+    expect(jsonBody.jsonrpc).toBe("2.0");
+    expect(jsonBody.error.code).toBe(-32000);
+    expect(jsonBody.error.message).toContain("evil.example.com");
+  });
+
+  it("allows origin present in MCP_ALLOWED_ORIGINS", () => {
+    const allowed = ["https://dashboard.example.com"];
+    const { req, res, next } = mockReqRes("https://dashboard.example.com");
+    validateOrigin(allowed)(req, res, next);
+    expect(next).toHaveBeenCalled();
+  });
+
+  it("rejects origin not in MCP_ALLOWED_ORIGINS", () => {
+    const allowed = ["https://dashboard.example.com"];
+    const { req, res, next, get } = mockReqRes("https://attacker.example.com");
+    validateOrigin(allowed)(req, res, next);
+    expect(next).not.toHaveBeenCalled();
+    const { statusCode } = get();
+    expect(statusCode).toBe(403);
   });
 });

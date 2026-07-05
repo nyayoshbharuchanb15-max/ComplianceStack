@@ -321,10 +321,22 @@ Audit certificates are issued as **W3C VCs with Ed25519 cryptographic proof**:
 |---------|-------------|
 | **Zero Data Egress** | All operations in-process by default (adversarial testing is optional external) |
 | **OAuth 2.1 + RBAC** | Admin, auditor, viewer roles with scoped endpoints |
-| **PII Redaction** | Middleware intercepts and redacts PII from all API responses |
+| **PII Redaction** | Middleware intercepts and redacts PII from API responses |
 | **Ed25519 Signing** | Keys never leave the container |
 | **Merkle Audit Trail** | Tamper-evident evidence chain |
 | **On-Premise Only** | No telemetry, no external dependencies |
+| **DNS-Rebinding Protection** | Origin header validation + localhost binding by default |
+
+### HTTP Transport Security
+
+The SSE and Streamable HTTP transports bind to `127.0.0.1` by default, preventing access from other machines. Origin header validation rejects requests from unexpected origins (e.g. a malicious webpage using a victim's browser to reach a local MCP server).
+
+| Variable | Default | Description |
+|----------|---------|-------------|
+| `MCP_HTTP_HOST` | `127.0.0.1` | Bind address. Set to `0.0.0.0` to listen on all interfaces (e.g. Docker). |
+| `MCP_ALLOWED_ORIGINS` | (empty) | Comma-separated allowlist of additional origins beyond localhost. |
+
+Non-browser clients (curl, MCP CLI, server-to-server) that don't send an Origin header are always allowed. Requests from `http://localhost:*` and `http://127.0.0.1:*` are always allowed.
 
 ---
 

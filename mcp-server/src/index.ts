@@ -903,16 +903,37 @@ server.setRequestHandler(CallToolRequestSchema, async (request, extra) => {
 });
 
 // ═══════════════════════════════════════════════════════════════════
+//  DNS-Rebinding Protection: Origin Validation Middleware
+// ═══════════════════════════════════════════════════════════════════
+
+export function validateOrigin(allowedOrigins: string[]) {
+  return (req: express.Request, res: express.Response, next: express.NextFunction) => {
+    const origin = req.headers.origin;
+    if (!origin) return next();
+    const isLocalhost = /^https?:\/\/(localhost|127\.0\.0\.1)(:\d+)?$/.test(origin);
+    if (isLocalhost || allowedOrigins.includes(origin)) return next();
+    res.status(403).json({
+      jsonrpc: "2.0",
+      error: { code: -32000, message: `Origin '${origin}' is not allowed` },
+      id: null,
+    });
+  };
+}
+
+// ═══════════════════════════════════════════════════════════════════
 //  TRANSPORT: Start MCP Server
 // ═══════════════════════════════════════════════════════════════════
 
 async function main() {
   const transportType = process.env.MCP_TRANSPORT || "stdio";
+  const host = process.env.MCP_HTTP_HOST || "127.0.0.1";
+  const allowedOrigins = process.env.MCP_ALLOWED_ORIGINS?.split(",").map((s) => s.trim()).filter(Boolean) ?? [];
 
   if (transportType === "sse") {
     // ── SSE Transport ────────────────────────────────────────────
     const app = express();
     app.use(express.json());
+    app.use(validateOrigin(allowedOrigins));
     const transports: Map<string, SSEServerTransport> = new Map();
 
     app.get("/health", (_req, res) => {
@@ -948,8 +969,8 @@ async function main() {
     });
 
     const port = parseInt(process.env.PORT || "3000", 10);
-    app.listen(port, () => {
-      console.error(`[ComplianceStack MCP] SSE transport listening on port ${port}`);
+    app.listen(port, host, () => {
+      console.error(`[ComplianceStack MCP] SSE transport listening on ${host}:${port}`);
     });
   } else if (transportType === "streamable-http") {
     // ── Streamable HTTP Transport (True MCP Implementation) ─────
@@ -964,6 +985,7 @@ async function main() {
       ({ StreamableHTTPSessionManager }) => {
         const app = express();
         app.use(express.json({ limit: "10mb" }));
+        app.use(validateOrigin(allowedOrigins));
         const sessionManager = new StreamableHTTPSessionManager();
         sessionManager.startCleanup();
 
@@ -1067,8 +1089,8 @@ async function main() {
         });
 
         const port = parseInt(process.env.PORT || "3000", 10);
-        app.listen(port, () => {
-          console.error(`[ComplianceStack MCP] Streamable HTTP transport on port ${port}`);
+        app.listen(port, host, () => {
+          console.error(`[ComplianceStack MCP] Streamable HTTP transport on ${host}:${port}`);
         });
       }
     );
