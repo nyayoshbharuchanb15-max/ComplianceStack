@@ -67,18 +67,18 @@ async def verify_human_oversight(request: VerifyHumanOversightRequest, request_o
     if not request.hasKillSwitch:
         remediation_parts.append(
             "Deploy a physical or software-based kill-switch capable of "
-            "immediately halting AI system output. This is MANDATORY for "
-            "real-time and autonomous deployment contexts (EU AI Act Art. 14(1))."
+            "immediately halting AI system output. EU AI Act Art. 14(4)(e) requires "
+            "ALL high-risk AI systems to support intervention/interruption."
         )
 
-        # BLOCKER FAIL: No kill-switch for high-risk deployment contexts
-        if request.deploymentContext in ("real_time", "autonomous"):
-            blocker = True
-            oversight_level = OversightLevel.none_
-            remediation_parts.append(
-                "❌ BLOCKER: Real-time/autonomous deployment without kill-switch "
-                "violates EU AI Act Art. 14(1). Certification cannot proceed."
-            )
+        # BLOCKER FAIL: No kill-switch for ANY high-risk deployment
+        # Art. 14(4)(e) applies to all high-risk systems, not just specific contexts
+        blocker = True
+        oversight_level = OversightLevel.none_
+        remediation_parts.append(
+            "❌ BLOCKER: High-risk AI system without kill-switch violates "
+            "EU AI Act Art. 14(4)(e). Certification cannot proceed."
+        )
 
     # ── Check 3: Process Documentation ───────────────────────────
     if not request.oversightProcess:

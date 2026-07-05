@@ -197,7 +197,7 @@ def _audit_single_prompt(name: str, text: str) -> list[PromptTemplateSection]:
             "AI disclosure marker present." if has_ai_disclosure
             else "No AI disclosure marker in template."
         ),
-        remediation="Add 'I am an AI' disclosure to user-facing prompts per EU AI Act Art. 13.",
+        remediation="Add AI disclosure to user-facing prompts per EU AI Act Art. 50(1) (transparency to natural persons).",
     ))
 
     # 8. Role Boundary Clarity

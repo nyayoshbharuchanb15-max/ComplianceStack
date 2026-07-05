@@ -444,9 +444,9 @@ class DPDPConsentRecord(BaseModel):
     withdrawable: bool
     mappedSections: list[str] = Field(
         default_factory=lambda: [
-            "DPDP Act 2023 Sec. 5 (Consent)",
-            "DPDP Act 2023 Sec. 6 (Deemed Consent)",
-            "DPDP Act 2023 Sec. 7 (Duties of Data Fiduciary)",
+            "DPDP Act 2023 Sec. 5 (Notice)",
+            "DPDP Act 2023 Sec. 6 (Consent)",
+            "DPDP Act 2023 Sec. 7 (Legitimate Uses)",
         ]
     )
     compliant: bool
@@ -473,16 +473,16 @@ class DPDPComplianceReport(BaseModel):
     crossBorderTransferCompliant: bool
     mappedSections: list[str] = Field(
         default_factory=lambda: [
-            "DPDP Act 2023 Sec. 5 (Consent)",
-            "DPDP Act 2023 Sec. 6 (Deemed Consent)",
-            "DPDP Act 2023 Sec. 7 (Duties of Data Fiduciary)",
-            "DPDP Act 2023 Sec. 8 (Duties of Data Processor)",
-            "DPDP Act 2023 Sec. 9 (Additional Obligations)",
-            "DPDP Act 2023 Sec. 10 (Rights of Data Principal)",
-            "DPDP Act 2023 Sec. 11 (Right to Update)",
-            "DPDP Act 2023 Sec. 12 (Right to Erasure)",
+            "DPDP Act 2023 Sec. 5 (Notice)",
+            "DPDP Act 2023 Sec. 6 (Consent)",
+            "DPDP Act 2023 Sec. 7 (Legitimate Uses)",
+            "DPDP Act 2023 Sec. 8 (Obligations of Data Fiduciary)",
+            "DPDP Act 2023 Sec. 9 (Children's Data)",
+            "DPDP Act 2023 Sec. 10 (Significant Data Fiduciary)",
+            "DPDP Act 2023 Sec. 11 (Right to Access)",
+            "DPDP Act 2023 Sec. 12 (Right to Correction and Erasure)",
             "DPDP Act 2023 Sec. 13 (Grievance Redressal)",
-            "DPDP Act 2023 Sec. 14 (Data Protection Officer)",
+            "DPDP Act 2023 Sec. 14 (Right to Nominate)",
         ]
     )
     compliant: bool
@@ -571,7 +571,7 @@ class ROPAReport(BaseModel):
             "GDPR Art. 30 (Record of Processing Activities)",
             "GDPR Art. 5(2) (Accountability)",
             "ISO/IEC 42001:2023 Clause 7.5 (Documented Information)",
-            "EU AI Act Art. 12 (Technical Documentation)",
+            "EU AI Act Art. 11 (Technical Documentation)",
         ]
     )
     iso42001Clause: str = "ISO/IEC 42001:2023 Clause 7.5 (Documented Information)"
@@ -776,7 +776,7 @@ class AgentTrustReport(BaseModel):
     mappedArticles: list[str] = Field(
         default_factory=lambda: [
             "EU AI Act Art. 14 (Human Oversight)",
-            "EU AI Act Art. 12 (Technical Documentation)",
+            "EU AI Act Art. 11 (Technical Documentation)",
             "NIST AI RMF GOVERN 1.2 (Supply Chain)",
             "DPDP Act 2023 Sec. 8 (Processor Duties)",
             "ISO/IEC 42001:2023 Clause 7.4.3 (Supply Chain)",

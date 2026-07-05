@@ -9,7 +9,7 @@ graph for data lineage, IP clearance, and third-party dependencies.
 
 EU AI Act Art. 10 — Data governance requires that training data
 be examined for biases and gaps.
-EU AI Act Art. 12 — Technical documentation must include the
+EU AI Act Art. 11 — Technical documentation must include the
 development methodology and data sources.
 ISO/IEC 42001:2023 Clause 7.4.3 — Supply chain traceability.
 """
@@ -57,7 +57,7 @@ async def discover_supply_chain(request: DiscoveryRequest, request_obj: Request)
         # Add regulatory mappings to discovery result
         result["mappedArticles"] = [
             "EU AI Act Art. 10 (Data Governance)",
-            "EU AI Act Art. 12 (Technical Documentation)",
+            "EU AI Act Art. 11 (Technical Documentation)",
             "ISO/IEC 42001:2023 Clause 7.4.3 (Supply Chain Traceability)",
             "NIST AI RMF MAP 2.2 (Data Provenance)",
             "GDPR Art. 5(1)(d) (Accuracy of Data)",

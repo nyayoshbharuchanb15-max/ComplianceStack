@@ -8,7 +8,7 @@ Evaluates agent identity verification, capability claims validation,
 P2P message integrity, collusion detection, and cross-agent data leakage.
 
 EU AI Act Art. 14 — Human oversight requirements.
-EU AI Act Art. 12 — Technical documentation.
+EU AI Act Art. 11 — Technical documentation.
 NIST AI RMF GOVERN 1.2 — Supply chain governance.
 DPDP Act 2023 Sec. 8 — Processor duties.
 ISO/IEC 42001:2023 Clause 7.4.3 — Supply chain trust.

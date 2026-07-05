@@ -16,8 +16,8 @@ This middleware intercepts requests and responses to:
 GDPR Art. 5(1)(c) — Data minimisation: adequate, relevant, and
 limited to what is necessary.
 GDPR Art. 25 — Data protection by design and by default.
-DPDP Act 2023 Sec. 7(5) — Data fiduciary shall implement data
-protection safeguards including anonymization.
+DPDP Act 2023 Sec. 8(4) — Data Fiduciary shall implement appropriate
+technical and organisational measures including anonymization.
 """
 
 from __future__ import annotations

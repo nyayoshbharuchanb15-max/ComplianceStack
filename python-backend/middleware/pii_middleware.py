@@ -15,7 +15,7 @@ via the existing PIIRedactor singleton.
 GDPR Art. 5(1)(c) — Data minimisation.
 GDPR Art. 5(2)   — Accountability (demonstrate compliance).
 GDPR Art. 25     — Data protection by design and by default.
-DPDP Act 2023 Sec. 7(5) — Safeguards including anonymization.
+DPDP Act 2023 Sec. 8(4) — Safeguards including anonymization.
 """
 
 from __future__ import annotations

@@ -440,34 +440,36 @@ export const TOOL_SCHEMAS: ToolSchemaEntry[] = [
   {
     name: "assess_dpdp_compliance",
     description:
-      "Assesses AI model compliance against the India DPDP Act 2023 (Sec. 5\u201330). " +
-      "Evaluates consent mechanisms (Sec. 5/6), fiduciary duties (Sec. 8), " +
-      "data principal rights (Sec. 11\u201314), data localization (Sec. 16), " +
-      "cross-border transfer (Sec. 16), child protection (Sec. 9), " +
-      "significant data fiduciary obligations (Sec. 10), breach notification (Sec. 8(6)), " +
-      "and DPO requirements (Sec. 8(9)). " +
-      "\uD83D\uDD17 DPDP Act 2023 Sec. 5\u201330 | ISO/IEC 42001 Clause 6.2",
+      "Assesses AI model compliance against the India DPDP Act 2023. " +
+      "Evaluates consent mechanisms (Sec. 6), legitimate uses (Sec. 7), " +
+      "fiduciary obligations (Sec. 8), child protection (Sec. 9), " +
+      "Significant Data Fiduciary obligations including DPO (Sec. 10), " +
+      "data principal rights — access, correction, erasure (Sec. 11–12), " +
+      "grievance redressal (Sec. 13), cross-border transfers (Sec. 16). " +
+      "Note: DPDP Rules 2025 (G.S.R. 846(E)) create additional obligations " +
+      "including 72-hour breach notification (Rule 21). " +
+      "\uD83D\uDD17 DPDP Act 2023 Sec. 5–16 | ISO/IEC 42001 Clause 6.2",
     inputSchema: {
       type: "object",
       properties: {
         modelId: MODEL_ID_SCHEMA,
-        dataFiduciary: { type: "string", description: "Name or legal entity of the Data Fiduciary (Sec. 3(8))", minLength: 1, maxLength: 500 },
-        consentMechanism: { type: "string", enum: ["explicit", "implied", "opt_out", "none"], description: "Consent mechanism for processing personal data (Sec. 5/6)" },
-        dataPrincipalRights: { type: "array", items: { type: "string", enum: ["access", "correction", "erasure", "grievance_redressal", "nomination"] }, minItems: 1, description: "Data principal rights implemented (Sec. 11\u201314)" },
-        processingPurpose: { type: "string", description: "Lawful purpose of data processing (Sec. 7)", minLength: 1 },
+        dataFiduciary: { type: "string", description: "Name or legal entity of the Data Fiduciary (Sec. 2(i))", minLength: 1, maxLength: 500 },
+        consentMechanism: { type: "string", enum: ["explicit", "implied", "opt_out", "none"], description: "Consent mechanism for processing personal data (Sec. 6)" },
+        dataPrincipalRights: { type: "array", items: { type: "string", enum: ["access", "correction", "erasure", "grievance_redressal", "nomination"] }, minItems: 1, description: "Data principal rights implemented (Sec. 11–14)" },
+        processingPurpose: { type: "string", description: "Lawful purpose of data processing (Sec. 7(a))", minLength: 1 },
         dataLocalization: { type: "boolean", description: "Whether personal data is stored only in India (Sec. 16)" },
         crossBorderTransfer: { type: "boolean", description: "Whether cross-border data transfer is permitted (Sec. 16)" },
         transferCountries: { type: "array", items: { type: "string" }, description: "Countries to which data is transferred (Sec. 16)" },
-        hasDataProtectionOfficer: { type: "boolean", description: "Whether a Data Protection Officer is appointed (Sec. 8(9))" },
-        hasPrivacyPolicy: { type: "boolean", description: "Whether a privacy policy is published (Sec. 8(7))" },
-        hasBreachNotification: { type: "boolean", description: "Whether breach notification mechanism exists (Sec. 8(6))" },
-        breachNotificationHours: { type: "number", minimum: 1, maximum: 720, description: "Breach notification timeline in hours (Sec. 8(6))" },
+        hasDataProtectionOfficer: { type: "boolean", description: "Whether a DPO is appointed (required for Significant Data Fiduciaries only — Sec. 10(2)(a))" },
+        hasPrivacyPolicy: { type: "boolean", description: "Whether a privacy policy is published (good practice; not explicitly mandated by the Act)" },
+        hasBreachNotification: { type: "boolean", description: "Whether breach notification mechanism exists (Sec. 8(6); 72-hour timeline per DPDP Rules 2025 Rule 21)" },
+        breachNotificationHours: { type: "number", minimum: 1, maximum: 720, description: "Breach notification timeline in hours (72h per DPDP Rules 2025 Rule 21)" },
         hasChildProtection: { type: "boolean", description: "Whether child data protection measures are implemented (Sec. 9)" },
-        hasSignificantDataFiduciaryObligations: { type: "boolean", description: "Whether SDF obligations are met (Sec. 10)" },
-        processingRecords: { type: "boolean", description: "Whether processing records are maintained (Sec. 8(7))" },
-        dataRetentionDays: { type: "number", minimum: 1, description: "Data retention period in days (Sec. 8(7))" },
-        hasConsentRecords: { type: "boolean", description: "Whether consent records are maintained (Sec. 8(8))" },
-        hasAuditTrail: { type: "boolean", description: "Whether an audit trail is maintained (Sec. 8(7))" },
+        hasSignificantDataFiduciaryObligations: { type: "boolean", description: "Whether entity is classified as Significant Data Fiduciary (Sec. 10(1))" },
+        processingRecords: { type: "boolean", description: "Whether processing records are maintained (good practice; mandated by DPDP Rules 2025)" },
+        dataRetentionDays: { type: "number", minimum: 1, description: "Data retention period in days (erasure required when purpose served per Sec. 8(7))" },
+        hasConsentRecords: { type: "boolean", description: "Whether consent records are maintained (good practice; specific requirements per DPDP Rules 2025)" },
+        hasAuditTrail: { type: "boolean", description: "Whether an audit trail is maintained (good practice)" },
       },
       required: ["modelId", "dataFiduciary", "consentMechanism"],
       additionalProperties: false,

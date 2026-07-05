@@ -16,7 +16,7 @@ When Redis is unavailable, requests pass through (graceful degradation).
 
 Returns 429 Too Many Requests with Retry-After header when exceeded.
 
-NIST AI RMF GOVERN 1.5 — Rate limiting prevents abuse.
+NIST AI RMF GOVERN — Organizational policies should include abuse prevention measures.
 """
 
 from __future__ import annotations

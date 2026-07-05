@@ -48,7 +48,8 @@ class TestHumanOversight:
         assert "BLOCKER" in result.remediation
 
     @pytest.mark.asyncio
-    async def test_missing_kill_switch_no_blocker_for_assistive(self):
+    async def test_missing_kill_switch_blocker_for_all_contexts(self):
+        """Art. 14(4)(e) requires kill-switch for ALL high-risk systems, not just real-time."""
         req = VerifyHumanOversightRequest(
             modelId="test-model",
             hasHumanInTheLoop=False,
@@ -56,7 +57,7 @@ class TestHumanOversight:
             deploymentContext=DeploymentContext.assistive,
         )
         result = await verify_human_oversight(req, request_obj=_make_request_obj())
-        assert result.blocker is False
+        assert result.blocker is True
 
     @pytest.mark.asyncio
     async def test_regulatory_mappings_present(self):

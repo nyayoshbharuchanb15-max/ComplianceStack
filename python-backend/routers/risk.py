@@ -32,8 +32,8 @@ HIGH_RISK_SECTORS = {
 
 PROHIBITED_PRACTICES = {
     "subliminal_manipulation": "Art. 5(1)(a): Subliminal techniques causing harm",
-    "social_scoring": "Art. 5(1)(c): Social scoring by public authorities",
-    "real_time_biometric": "Art. 5(1)(d): Real-time biometric surveillance in public spaces",
+    "social_scoring": "Art. 5(1)(c): Social scoring leading to detrimental treatment",
+    "real_time_biometric": "Art. 5(1)(h): Real-time remote biometric identification in public spaces (law enforcement, with exceptions)",
 }
 
 
