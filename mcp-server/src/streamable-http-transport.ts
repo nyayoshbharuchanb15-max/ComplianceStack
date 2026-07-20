@@ -213,6 +213,17 @@ export class StreamableHTTPTransport implements Transport {
   }
 
   /**
+   * Detach the SSE response when its underlying HTTP connection closes.
+   * Subsequent `send()` calls will re-queue messages until a new SSE
+   * connection reattaches with the same session id.
+   */
+  detachSSE(res: Response): void {
+    if (this._sseRes === res) {
+      this._sseRes = undefined;
+    }
+  }
+
+  /**
    * Process a single JSON-RPC request and return a response.
    * If the handler returns undefined (e.g., for notifications), return null.
    */

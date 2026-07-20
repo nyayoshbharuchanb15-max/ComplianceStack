@@ -1049,9 +1049,11 @@ async function main() {
             await server.connect(transport);
 
             res.setHeader("mcp-session-id", session.id);
-            res.on("close", () => {
-              sessionManager.terminateSession(session.id);
-            });
+            // Note: the session must NOT be terminated when this initial POST
+            // response closes — the session is expected to live across
+            // subsequent POSTs and the SSE GET stream. Idle sessions are
+            // reaped by `sessionManager.startCleanup()`; explicit termination
+            // happens on `DELETE /mcp`.
 
             await transport.handlePostMessage(req, res);
             console.error(`[ComplianceStack MCP] New session: ${session.id}`);
@@ -1107,7 +1109,8 @@ async function main() {
 
           res.on("close", () => {
             clearInterval(heartbeat);
-            console.error(`[ComplianceStack MCP] SSE closed for ${sessionId}`);
+            session.transport.detachSSE(res);
+            console.error(`[ComplianceStack MCP] SSE closed for ${sessionId} (session kept alive; idle cleanup handles GC)`);
           });
         });
 

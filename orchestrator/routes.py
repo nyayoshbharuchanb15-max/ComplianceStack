@@ -3,12 +3,13 @@
 from __future__ import annotations
 from typing import Optional
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, File, Form, HTTPException, UploadFile
 from pydantic import BaseModel, Field
 
 from certs import issuer as vc_issuer
 from events.fabric import fabric
 from graph import lineage
+from orchestrator import ingest as ingest_mod
 from orchestrator import pipeline, reaudit
 from orchestrator.auth import issue_token, require_scope
 from orchestrator.state_machine import PipelineError
@@ -72,6 +73,11 @@ class EvidenceArtifact(BaseModel):
     uri: Optional[str] = None
     mimeType: Optional[str] = None
     contentSnippet: Optional[str] = None
+    contentBase64: Optional[str] = Field(
+        None, max_length=20_000_000,
+        description="Optional base64-encoded raw file content. When present the "
+                    "server extracts text (PDF/CSV/JSON/MD/TXT) and runs the "
+                    "document gap analyzer against the extracted text.")
     sha256: Optional[str] = None
     sizeBytes: Optional[int] = None
     tags: list[str] = Field(default_factory=list)
@@ -330,6 +336,7 @@ async def get_run(run_id: str, claims: dict = Depends(require_scope("runs:read")
     cert = await store.get_certificate_for_run(run_id)
     citations = await artifact_store.list_citations(run_id)
     arts = await artifact_store.list_artifacts(run_id)
+    gaps = await artifact_store.list_phase_gaps(run_id)
     return {
         "runId": run_id, "modelId": run["model_id"], "modelVersion": run["model_version"],
         "status": run["status"], "reauditOf": run.get("reaudit_of"),
@@ -347,6 +354,7 @@ async def get_run(run_id: str, claims: dict = Depends(require_scope("runs:read")
                    for r in results],
         "artifacts": arts,
         "citations": citations,
+        "gaps": gaps,
         "certificateId": cert["certificate_id"] if cert else None,
     }
 
@@ -361,15 +369,78 @@ async def get_run_lineage(run_id: str, claims: dict = Depends(require_scope("run
 @router.post("/runs/{run_id}/artifacts")
 async def upload_artifacts(run_id: str, req: ArtifactUploadRequest,
                            claims: dict = Depends(require_scope("phase:intake"))):
+    """Upload one or more artifact descriptors (JSON body).
+
+    Each artifact may include an optional ``contentBase64`` field. When
+    present the server decodes it, computes sha256 over the raw bytes,
+    extracts text, and runs the document gap analyzer.
+    """
     run = await store.get_run(run_id)
     if not run:
         raise HTTPException(status_code=404, detail={
             "code": "RUN_NOT_FOUND", "message": f"Run {run_id} not found"})
     stored: list[dict] = []
     for art in req.artifacts:
-        stored.append(await artifact_store.insert_artifact(
-            run_id, art.model_dump(exclude_none=True), submitted_by=claims["sub"]))
+        payload = art.model_dump(exclude_none=True)
+        b64 = payload.pop("contentBase64", None)
+        try:
+            if b64:
+                stored.append(await ingest_mod.ingest_artifact_base64(
+                    run_id, payload, b64, submitted_by=claims["sub"]))
+            else:
+                stored.append(await ingest_mod.ingest_artifact_descriptor(
+                    run_id, payload, submitted_by=claims["sub"]))
+        except ValueError as e:
+            raise HTTPException(status_code=422, detail={
+                "code": "INVALID_ARTIFACT", "message": str(e)})
     return {"runId": run_id, "artifacts": stored}
+
+
+@router.post("/runs/{run_id}/artifacts/upload")
+async def upload_artifact_multipart(
+    run_id: str,
+    file: UploadFile = File(...),
+    type: str = Form(...),
+    name: Optional[str] = Form(None),
+    tags: Optional[str] = Form(None),
+    uri: Optional[str] = Form(None),
+    claims: dict = Depends(require_scope("phase:intake")),
+):
+    """Upload a real file as an artifact (multipart/form-data).
+
+    The server computes sha256 over the raw bytes, extracts text
+    (PDF via pypdf, CSV/JSON/MD/TXT natively), and runs the document gap
+    analyzer for the declared artifact ``type``.
+    """
+    run = await store.get_run(run_id)
+    if not run:
+        raise HTTPException(status_code=404, detail={
+            "code": "RUN_NOT_FOUND", "message": f"Run {run_id} not found"})
+
+    if not type or not type.replace("_", "").isalpha():
+        raise HTTPException(status_code=422, detail={
+            "code": "INVALID_TYPE",
+            "message": "type must be a lowercase snake_case artifact category"})
+
+    content = await file.read()
+    if len(content) == 0:
+        raise HTTPException(status_code=422, detail={
+            "code": "EMPTY_FILE", "message": "Uploaded file is empty"})
+    if len(content) > 20 * 1024 * 1024:
+        raise HTTPException(status_code=413, detail={
+            "code": "FILE_TOO_LARGE",
+            "message": "Artifact exceeds 20 MB limit"})
+
+    meta = {
+        "name": name or file.filename or f"upload-{type}",
+        "type": type,
+        "uri": uri,
+        "mimeType": file.content_type or None,
+        "tags": [t.strip() for t in (tags or "").split(",") if t.strip()],
+    }
+    stored = await ingest_mod.ingest_artifact_bytes(
+        run_id, meta, content, submitted_by=claims["sub"])
+    return {"runId": run_id, "artifact": stored}
 
 
 @router.get("/runs/{run_id}/artifacts")
@@ -381,7 +452,19 @@ async def list_run_artifacts(run_id: str,
             "code": "RUN_NOT_FOUND", "message": f"Run {run_id} not found"})
     return {"runId": run_id,
             "artifacts": await artifact_store.list_artifacts(run_id),
-            "citations": await artifact_store.list_citations(run_id)}
+            "citations": await artifact_store.list_citations(run_id),
+            "gaps": await artifact_store.list_phase_gaps(run_id)}
+
+
+@router.get("/artifacts/{artifact_id}")
+async def get_artifact(artifact_id: str,
+                        claims: dict = Depends(require_scope("runs:read"))):
+    """Return the extracted text + gap findings for one artifact (for preview)."""
+    art = await artifact_store.get_artifact_text(artifact_id)
+    if not art:
+        raise HTTPException(status_code=404, detail={
+            "code": "ARTIFACT_NOT_FOUND", "message": f"Artifact {artifact_id} not found"})
+    return art
 
 
 # ─── Certificates ────────────────────────────────────────────────

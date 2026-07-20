@@ -7,3 +7,5 @@ PyJWT>=2.8
 cryptography>=42.0
 httpx>=0.27
 python-dotenv>=1.0
+python-multipart>=0.0.20
+pypdf>=6.0

@@ -12,6 +12,7 @@ from engines import (explainability_engine, fairness_engine, privacy_engine,
 from events.fabric import fabric
 from graph import lineage
 from orchestrator import citations as citations_mod
+from orchestrator import ingest as ingest_mod
 from orchestrator import scoping
 from orchestrator.config import status_base_url
 from orchestrator.state_machine import PHASE_NUMBERS, PipelineError, ensure_can_execute
@@ -54,12 +55,25 @@ async def _persist_phase(run: dict, phase_key: str, status: str, inputs: dict,
     run_id = run["run_id"]
     control_version = CONTROL_VERSIONS[phase_key]
 
-    # Build article-level citations against the submitted evidence artifacts.
-    persist_citations, cited_artifacts, missing_artifacts = \
+    # Build article-level citations against the submitted evidence artifacts
+    # AND document-level gap findings (which specific sections of each doc
+    # are missing/partial against sub-articles).
+    persist_citations, cited_artifacts, missing_artifacts, document_gaps = \
         await citations_mod.build_phase_citations(run_id, phase_key, outputs, blockers)
+
+    # Escalate blocker-severity document gaps into phase blockers.
+    from engines.gap_analysis import rollup_phase_blockers
+    doc_gap_blockers = rollup_phase_blockers(document_gaps, phase_key)
+    if doc_gap_blockers:
+        blockers = list(blockers) + doc_gap_blockers
+        if status == "passed":
+            status = "blocked"
+
     outputs = {**outputs,
                "citedArtifacts": cited_artifacts,
                "missingArtifacts": missing_artifacts,
+               "documentGaps": document_gaps,
+               "documentGapSummary": _gap_summary(document_gaps),
                "articleCitations": [
                    {"expectedType": c["expectedType"],
                     "framework": c["framework"], "article": c["article"],
@@ -72,6 +86,7 @@ async def _persist_phase(run: dict, phase_key: str, status: str, inputs: dict,
         run_id, phase_key, PHASE_NUMBERS[phase_key], status, inputs, outputs,
         articles, blockers, control_version, ih, prev_hash, actor=actor)
     await artifact_store.insert_citations(run_id, phase_key, persist_citations)
+    await artifact_store.insert_phase_gaps(run_id, phase_key, document_gaps)
     await lineage.record_phase(
         run_id, phase_key, PHASE_NUMBERS[phase_key], status, meta["result_id"],
         meta["evidence_id"], ih, control_version, articles, blockers)
@@ -86,8 +101,26 @@ async def _persist_phase(run: dict, phase_key: str, status: str, inputs: dict,
         "prevHash": prev_hash, "evidenceId": meta["evidence_id"],
         "legalMappings": articles, "blockers": blockers, "outputs": outputs,
         "citedArtifacts": cited_artifacts, "missingArtifacts": missing_artifacts,
+        "documentGaps": document_gaps,
         "completedAt": meta["created_at"],
     }
+
+
+def _gap_summary(gaps: list[dict]) -> dict:
+    """Aggregate counts of {present, partial, gap} findings by severity."""
+    counts = {"present": 0, "partial": 0, "gap": 0,
+              "blockerGaps": 0, "warningGaps": 0}
+    for g in gaps:
+        v = g.get("verdict")
+        s = g.get("severity")
+        if v in counts:
+            counts[v] += 1
+        if v == "gap":
+            if s == "blocker":
+                counts["blockerGaps"] += 1
+            elif s == "warning":
+                counts["warningGaps"] += 1
+    return counts
 
 
 async def execute_intake(inputs: dict, actor: str,
@@ -111,9 +144,19 @@ async def execute_intake(inputs: dict, actor: str,
 
     # Persist any evidence artifacts submitted with the intake payload so that
     # subsequent phase engines can cite them under specific regulatory articles.
+    # Artifacts may include inline base64 content (`contentBase64`) — if so
+    # the ingest module extracts text and runs gap analysis; otherwise they
+    # are stored as descriptors.
     submitted_artifacts: list[dict] = []
     for art in inputs.get("evidenceArtifacts", []) or []:
-        stored = await artifact_store.insert_artifact(run_id, art, submitted_by=actor)
+        meta = {k: v for k, v in art.items() if k != "contentBase64"}
+        b64 = art.get("contentBase64")
+        if b64:
+            stored = await ingest_mod.ingest_artifact_base64(
+                run_id, meta, b64, submitted_by=actor)
+        else:
+            stored = await ingest_mod.ingest_artifact_descriptor(
+                run_id, meta, submitted_by=actor)
         submitted_artifacts.append(stored)
 
     outputs = {

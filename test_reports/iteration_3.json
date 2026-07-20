@@ -1,0 +1,29 @@
+{
+  "summary": "Full backend + frontend verification of iteration 3 (P1 MCP session-lifecycle fix + rich artifact ingest + document-level gap analysis). Vitest: 52/52 pass (includes new session-lifecycle.test.ts, 3 tests). Governance pytest: 28/28 pass against http://localhost:8001 (includes tests/governance/test_gap_analysis.py — 7 tests covering good/bad DPIA, blocker escalation into data_protection phase, multipart upload, PDF extraction, bias-test missing-DI, artifact text endpoint). P1 fix verified end-to-end over HTTP against http://localhost:3000/mcp with a new regression test (/app/tests/mcp_session_lifecycle_http.py): (1) POST /mcp with no session -> 200 + mcp-session-id header; (2) follow-up POST reusing that id -> 200 (the exact bug — no longer 404); (3) DELETE /mcp -> 200; (4) POST post-DELETE -> 404. Frontend (preview URL, SPA): one-click 'Run full demo audit' completed all 9 phases green; wizard artifact editor has file input with accept='.pdf,.csv,.json,.md,.txt,.log'; run detail page shows 4 KPI cards including DOCUMENT GAPS 0 / 0 (green); artifact table now has EXTRACTION and GAP SCORE columns (extracted/pending/error pill + %); expanding Data Protection & Privacy phase reveals DOCUMENT GAP ANALYSIS — 0 BLOCKER · 0 WARNING · 14 PRESENT/PARTIAL with rows for GDPR Art. 35(7)(a), 35(7)(b), 35(7)(c), 35(7)(d), 35(2), 5(1)(e), 6 (and more), each with a real excerpt from the demo DPIA (e.g. '…Data Protection Impact Assessment — CV Screener v1.0 Section 1 — Systematic description of the processing operations…').",
+  "backend_issues": {"critical": [], "minor": []},
+  "frontend_issues": {"ui_bugs": [], "integration_issues": [], "design_issues": []},
+  "test_report_links": [
+    "/app/tests/mcp_session_lifecycle_http.py",
+    "/app/tests/governance/test_gap_analysis.py",
+    "/app/tests/governance/test_new_backend_endpoints.py",
+    "/app/tests/governance/test_artifacts_and_citations.py",
+    "/app/tests/governance/test_governance_pipeline.py",
+    "/app/test_reports/pytest/governance_iter3.xml",
+    "/app/mcp-server/src/__tests__/session-lifecycle.test.ts"
+  ],
+  "action_items": [],
+  "critical_code_review_comments": [
+    "MCP transport: detachSSE() correctly clears _sseRes on SSE close so pending messages queue for reconnect (verified via session-lifecycle.test.ts and end-to-end HTTP).",
+    "Session lifecycle in /app/mcp-server/src/index.ts no longer terminates the session on initial POST response close — session is only terminated on explicit DELETE /mcp or the sessionManager idle-cleanup timeout (verified via HTTP regression test)."
+  ],
+  "updated_files": [
+    "/app/tests/mcp_session_lifecycle_http.py (new — HTTP-level P1 regression)"
+  ],
+  "success_rate": {"backend": "100% (28/28 governance pytest + 52/52 vitest + 4/4 HTTP P1 lifecycle steps)", "frontend": "100% (all iteration-3 criteria observed: file input on wizard with correct accept, DOCUMENT GAPS KPI card '0/0', EXTRACTION + GAP SCORE columns on artifact table, per-phase DOCUMENT GAP ANALYSIS with all required GDPR articles and real DPIA excerpts)"},
+  "test_credentials": "governance-admin/govern-admin-secret-dev (used); other three service accounts covered by test_new_backend_endpoints.py",
+  "seed_data_creation": "Demo run e336460c-4668-472d-b940-a709e9257aea created via one-click wizard (model demo-cvscreener-mrt2q28u). Multiple TEST_gap-* runs created by test_gap_analysis.py (governance pytest).",
+  "retest_needed": false,
+  "main_agent_can_self_test": true,
+  "context_for_next_testing_agent": "P1 MCP session-lifecycle regression is covered by both vitest (session-lifecycle.test.ts) and an HTTP-level test at /app/tests/mcp_session_lifecycle_http.py — run the latter directly with `python /app/tests/mcp_session_lifecycle_http.py` (must exit 0). SPA login: sessionStorage keys are gov.token / gov.role / gov.scopes / gov.clientId — Playwright must inject these and then window.location.reload() (setting the hash alone will not re-init the in-memory S object). File input on wizard: input[type='file'] with accept='.pdf,.csv,.json,.md,.txt,.log'. Run detail selectors: .tl-head (phase row header), .cit-row (article citation rows), DOCUMENT GAPS KPI text is uppercase in the UI.",
+  "rca of the issue": "Prior bug: /app/mcp-server/src/index.ts attached `res.on('close', () => sessionManager.terminateSession(session.id))` on the initial POST response, causing session teardown the moment the initial response finished — every follow-up POST reusing the mcp-session-id then hit 404. Fix removed that premature termination; session is now terminated only on DELETE /mcp or idle-timeout. Additionally, on SSE GET /mcp close, the transport's _sseRes pointer is cleared via detachSSE() so pending messages queue for reconnect instead of being silently dropped. Verified end-to-end over HTTP."
+}

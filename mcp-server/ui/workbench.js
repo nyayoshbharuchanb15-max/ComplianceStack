@@ -70,6 +70,154 @@ function toast(msg, kind = "info", ms = 4000) {
 }
 
 // ─── Sample demo payload (one-click demo) ───────────────────────
+const DEMO_ARTIFACT_TEXT = {
+  dpia: `Data Protection Impact Assessment — CV Screener v1.0
+
+Section 1 — Systematic description of the processing operations
+The purpose of processing is to rank candidate CVs for shortlisting in
+recruitment. Nature of processing includes automated ranking of applicant
+records. Scope of processing covers all applicants for open roles across EU
+and India.
+
+Section 2 — Necessity and proportionality of the processing
+The processing is necessary and proportional to the legitimate interest of
+the employer in efficient shortlisting.
+
+Section 3 — Risks to the rights and freedoms of data subjects
+Identified risks to rights and freedoms of data subjects include selection
+bias, chilling effect on right to erasure, and risk of discrimination.
+
+Section 4 — Measures envisaged (safeguards)
+Measures envisaged (safeguards): technical and organisational measures
+including audit logging, kill-switch, human oversight, mitigation measures
+for identified bias, encryption at rest, and role-based access control.
+
+Section 5 — DPO consultation
+Consulted the DPO (Data Protection Officer) on 2025-11-05.
+
+Retention period: 180 days.
+Lawful basis: legitimate interest under GDPR Art. 6(1)(f).`,
+  model_card: `Model Card — CV Screener v1.0
+
+Intended use / deployment context: automated CV ranking to assist
+recruiters in shortlisting job applicants.
+
+Out-of-scope / prohibited uses: this model must NOT be used for fully
+automated hiring decisions without human review. Foreseeable misuse
+includes decisions made without oversight.
+
+Training data — provenance and composition: dataset ds-cv-2025-q1
+sourced from anonymised historical CVs. Provenance documented in the
+dataset lineage record.
+
+Evaluation / performance metrics: accuracy 0.83, F1-score 0.81 on the
+held-out validation split; benchmark result exceeds internal baseline.
+
+Known limitations: model may under-represent gap-year candidates and
+non-linear career paths.
+
+Bias / fairness considerations: demographic parity across gender was
+tested; disparate impact ratio 0.94 exceeds the 0.8 threshold.
+
+Human oversight recommendations: reviewer approval required for every
+shortlist decision (human-in-the-loop).`,
+  bias_test_output: `Bias Test Output — CV Screener v1.0
+
+Sensitive attributes evaluated: gender, age band.
+Disparate impact (DI) ratio, four-fifths rule:
+  gender.F vs gender.M: 0.94 (PASS ≥ 0.8)
+  age_band.25-34 vs age_band.45-54: 0.91 (PASS ≥ 0.8)
+
+Demographic parity difference: 0.03.
+Equal opportunity difference: 0.02.
+Fairness threshold: 0.8. Result: PASSED.`,
+  fairness_metrics_report: `Fairness Metrics Report — CV Screener Q1 2025
+
+Per-group selection rates (positive rate):
+  gender.F: 0.62 · gender.M: 0.66 · gap 0.04
+  age_band.25-34: 0.65 · age_band.35-44: 0.63 · age_band.45-54: 0.59
+
+Equal-opportunity (TPR difference): 0.02 across gender.
+Mitigation strategy: reweighting during training + threshold calibration.`,
+  robustness_test_log: `Robustness Test Log — CV Screener Q1 2025
+
+Prompt-injection resistance test result: 0.97 (300/310 attempts blocked).
+Jailbreak / evasion test coverage: prompt corpus v3 executed; bypass rate 0.02.
+Adversarial input resistance metric: adversarial attack success rate 0.03.
+Rate-limiting / throttling controls in place: 100 req/min per user.`,
+  adversarial_test_report: `Red-team Adversarial Test Report
+
+Attack corpus and pass rate: 500 adversarial payloads, resistance rate 0.94.
+Red-team methodology: STRIDE-based threat model; two-week engagement.`,
+  security_audit: `Security Audit Report — Q1 2025
+
+Vulnerability findings enumerated: 3 low-severity findings (CVE-2025-11XX),
+1 medium (log leakage) — all remediated.
+Access control review: RBAC enforced, least privilege, quarterly rotation.`,
+  explainability_report: `Explainability Report — SHAP
+
+Explanation method declared: SHAP with TreeExplainer.
+User-facing explanation format: human-readable top-3 feature attributions
+shown to reviewers per decision.
+Global vs local explanation coverage: global feature importance summary
+plus per-decision local explanations.`,
+  decision_log_sample: `timestamp,trace_id,input_hash,reviewer,decision
+2025-11-01T09:00:12Z,tr-1001,ih-a,rev-01,shortlisted
+2025-11-01T09:00:18Z,tr-1002,ih-b,rev-01,rejected
+2025-11-01T09:00:35Z,tr-1003,ih-c,rev-02,shortlisted`,
+  oversight_procedure: `Human Oversight Procedure — CV Screener
+
+Human-in-the-loop step described: every shortlist decision is reviewed by
+a compliance officer before being sent to the candidate.
+Override / stop capability: reviewers may override or halt the pipeline;
+kill-switch runbook available.
+Named oversight roles: reviewer, compliance officer, data steward.`,
+  kill_switch_evidence: `Kill-switch Runbook
+
+Stop trigger / runbook step: on drift threshold breach or incident, run
+'ops halt cvscreener-01'. Time to disable: 90 seconds.
+Response / rollback SLA: 5 minutes to disable, 30 minutes to rollback.`,
+  data_flow_map: `Data Flow Map — CV Screener
+
+Data sources: HR ATS (upstream), applicant portal.
+Cross-border transfer path: EU → India via SCC.`,
+  ropa_record: `ROPA Record — Talent Platform CV Screener
+
+Purposes of processing: shortlisting job applicants for recruiters.
+Categories of data subjects: job applicants (EU and India).
+Categories of personal data: contact info, employment history.
+Retention periods: 180 days post-decision.`,
+  dataset_lineage: `Dataset Lineage — ds-cv-2025-q1
+
+Source: HR ATS export (2025-01 to 2025-03), version 1.
+Provenance: internal HR system, anonymised.
+Preprocessing / cleaning: deduplication, PII redaction, tokenization.
+Split: 70% train / 15% validation / 15% test.`,
+  risk_assessment: `Risk Assessment — CV Screener v1.0
+
+Risk identification: risk register maintained; threats include bias, drift,
+data poisoning, unauthorised access.
+Risk mitigation: control library applied, mitigation actions tracked in
+Jira; risk treatment plan reviewed quarterly.`,
+  consent_ux_evidence: `Consent UX Evidence
+
+Consent choice presented at intake: "I consent to automated screening" (opt-in checkbox).
+Withdraw / opt-out path: candidates can withdraw consent via the applicant portal at any time.`,
+  conformity_declaration: `EU AI Act Conformity Declaration (draft)
+
+Signed by the responsible officer at Talent Platform.
+Referenced harmonised standards: ISO/IEC 42001, IEC 62443.`,
+  monitoring_dashboard: `Post-Market Monitoring Dashboard
+
+Drift metric surfaced: population stability index (PSI) tracked per week.
+Fairness monitoring metric: disparate impact monitored per weekly cohort.`,
+  incident_report: `Incident Report — 2025-Q1 anomaly
+
+Incident timeline: detected at 2025-02-14 09:12 UTC; contained by 09:45.
+Root cause: upstream schema change → mis-encoded feature.
+Corrective action: remediation deployed; automated schema guard added.`,
+};
+
 const DEMO = {
   modelId: `demo-cvscreener-${Date.now().toString(36)}`,
   modelVersion: "1.0.0",
@@ -78,24 +226,24 @@ const DEMO = {
   processingActivities: [{ name: "cv-ranking", purpose: "Rank candidate CVs for shortlisting", dataCategories: ["contact", "employment_history"], dataSubjects: ["job_applicants"], crossBorder: true }],
   datasets: [{ datasetId: "ds-cv-2025-q1", name: "CV corpus 2025 Q1", version: "1", containsPersonalData: true }],
   evidenceArtifacts: [
-    { name: "CV Screener Model Card v1.0", type: "model_card", uri: "internal://docs/cvscreener/model-card-v1.md", tags: ["public"] },
-    { name: "ROPA Registry — Talent Platform", type: "ropa_record", uri: "internal://records/ropa/talent.pdf" },
-    { name: "Risk Assessment — CV Screener", type: "risk_assessment", uri: "internal://risk/cvscreener-2025.pdf" },
-    { name: "DPIA — CV Screener v1.0", type: "dpia", uri: "internal://dpia/cvscreener-dpia-v1.pdf" },
-    { name: "Data Flow Map — Talent Platform", type: "data_flow_map", uri: "internal://dataflow/cvscreener-2025.pdf" },
-    { name: "Consent UX Screenshots", type: "consent_ux_evidence", uri: "internal://ux/consent-flow-2025.pdf" },
-    { name: "Bias Test Output — Q1 2025", type: "bias_test_output", uri: "internal://tests/bias/cvscreener-2025-q1.json" },
-    { name: "Fairness Metrics Report — Q1 2025", type: "fairness_metrics_report", uri: "internal://tests/fairness/cvscreener-2025-q1.pdf" },
-    { name: "Dataset Lineage — ds-cv-2025-q1", type: "dataset_lineage", uri: "internal://lineage/ds-cv-2025.json" },
-    { name: "Red-team Adversarial Report", type: "adversarial_test_report", uri: "internal://tests/adversarial/cvscreener-red-team.pdf" },
-    { name: "Robustness Test Log — Q1", type: "robustness_test_log", uri: "internal://logs/robustness/cvscreener-2025-q1.log" },
-    { name: "Security Audit — Q1 2025", type: "security_audit", uri: "internal://security/audit-2025-q1.pdf" },
-    { name: "SHAP Explainability Report", type: "explainability_report", uri: "internal://xai/shap-report-2025.pdf" },
-    { name: "Decision Log Sample — Q1 2025", type: "decision_log_sample", uri: "internal://logs/decisions/q1-2025.csv" },
-    { name: "Human Oversight Procedure", type: "oversight_procedure", uri: "internal://procedures/oversight-v1.pdf" },
-    { name: "Kill-switch Runbook", type: "kill_switch_evidence", uri: "internal://ops/killswitch-runbook.md" },
-    { name: "Conformity Declaration (draft)", type: "conformity_declaration", uri: "internal://legal/conformity-declaration-v1.pdf" },
-    { name: "Monitoring Dashboard Screenshots", type: "monitoring_dashboard", uri: "internal://dashboards/cvscreener-monitoring.png" },
+    { name: "CV Screener Model Card v1.0", type: "model_card", uri: "internal://docs/cvscreener/model-card-v1.md", tags: ["public"], contentSnippet: DEMO_ARTIFACT_TEXT.model_card },
+    { name: "ROPA Registry — Talent Platform", type: "ropa_record", uri: "internal://records/ropa/talent.pdf", contentSnippet: DEMO_ARTIFACT_TEXT.ropa_record },
+    { name: "Risk Assessment — CV Screener", type: "risk_assessment", uri: "internal://risk/cvscreener-2025.pdf", contentSnippet: DEMO_ARTIFACT_TEXT.risk_assessment },
+    { name: "DPIA — CV Screener v1.0", type: "dpia", uri: "internal://dpia/cvscreener-dpia-v1.pdf", contentSnippet: DEMO_ARTIFACT_TEXT.dpia },
+    { name: "Data Flow Map — Talent Platform", type: "data_flow_map", uri: "internal://dataflow/cvscreener-2025.pdf", contentSnippet: DEMO_ARTIFACT_TEXT.data_flow_map },
+    { name: "Consent UX Screenshots", type: "consent_ux_evidence", uri: "internal://ux/consent-flow-2025.pdf", contentSnippet: DEMO_ARTIFACT_TEXT.consent_ux_evidence },
+    { name: "Bias Test Output — Q1 2025", type: "bias_test_output", uri: "internal://tests/bias/cvscreener-2025-q1.json", contentSnippet: DEMO_ARTIFACT_TEXT.bias_test_output },
+    { name: "Fairness Metrics Report — Q1 2025", type: "fairness_metrics_report", uri: "internal://tests/fairness/cvscreener-2025-q1.pdf", contentSnippet: DEMO_ARTIFACT_TEXT.fairness_metrics_report },
+    { name: "Dataset Lineage — ds-cv-2025-q1", type: "dataset_lineage", uri: "internal://lineage/ds-cv-2025.json", contentSnippet: DEMO_ARTIFACT_TEXT.dataset_lineage },
+    { name: "Red-team Adversarial Report", type: "adversarial_test_report", uri: "internal://tests/adversarial/cvscreener-red-team.pdf", contentSnippet: DEMO_ARTIFACT_TEXT.adversarial_test_report },
+    { name: "Robustness Test Log — Q1", type: "robustness_test_log", uri: "internal://logs/robustness/cvscreener-2025-q1.log", contentSnippet: DEMO_ARTIFACT_TEXT.robustness_test_log },
+    { name: "Security Audit — Q1 2025", type: "security_audit", uri: "internal://security/audit-2025-q1.pdf", contentSnippet: DEMO_ARTIFACT_TEXT.security_audit },
+    { name: "SHAP Explainability Report", type: "explainability_report", uri: "internal://xai/shap-report-2025.pdf", contentSnippet: DEMO_ARTIFACT_TEXT.explainability_report },
+    { name: "Decision Log Sample — Q1 2025", type: "decision_log_sample", uri: "internal://logs/decisions/q1-2025.csv", contentSnippet: DEMO_ARTIFACT_TEXT.decision_log_sample },
+    { name: "Human Oversight Procedure", type: "oversight_procedure", uri: "internal://procedures/oversight-v1.pdf", contentSnippet: DEMO_ARTIFACT_TEXT.oversight_procedure },
+    { name: "Kill-switch Runbook", type: "kill_switch_evidence", uri: "internal://ops/killswitch-runbook.md", contentSnippet: DEMO_ARTIFACT_TEXT.kill_switch_evidence },
+    { name: "Conformity Declaration (draft)", type: "conformity_declaration", uri: "internal://legal/conformity-declaration-v1.pdf", contentSnippet: DEMO_ARTIFACT_TEXT.conformity_declaration },
+    { name: "Monitoring Dashboard Screenshots", type: "monitoring_dashboard", uri: "internal://dashboards/cvscreener-monitoring.png", contentSnippet: DEMO_ARTIFACT_TEXT.monitoring_dashboard },
   ],
 };
 
@@ -851,9 +999,14 @@ function renderArtifactEditor(intake) {
       return;
     }
     intake.evidenceArtifacts.forEach((a, idx) => {
+      const hasBytes = !!a.contentBase64;
       list.appendChild(h("div", { class: "artifact-item" },
-        h("span", { class: "icon" }, "◈"),
-        h("div", { class: "name" }, h("b", null, a.name), h("span", { class: "meta" }, a.type + " · " + (a.uri || "inline"))),
+        h("span", { class: "icon" }, hasBytes ? "📄" : "◈"),
+        h("div", { class: "name" },
+          h("b", null, a.name,
+            hasBytes ? h("span", { class: "pill ok", style: "margin-left:6px;font-size:9.5px;" }, "bytes uploaded") : null),
+          h("span", { class: "meta" }, a.type + " · " + (a.uri || (hasBytes ? `${(a.contentBase64.length * 0.75 / 1024).toFixed(1)} KB` : "descriptor-only"))),
+        ),
         h("button", { class: "btn sm danger", onclick: () => { intake.evidenceArtifacts.splice(idx, 1); refresh(); } }, "Remove"),
       ));
     });
@@ -870,18 +1023,37 @@ function renderArtifactEditor(intake) {
     "risk_assessment", "conformity_declaration",
     "monitoring_dashboard", "incident_report", "other",
   ].map(t => h("option", { value: t }, t)));
-  const uriIn = h("input", { placeholder: "URI or reference (internal://…)" });
-  const addBtn = h("button", { class: "btn primary sm", onclick: () => {
+  const uriIn = h("input", { placeholder: "URI or reference (internal://…) — optional" });
+  const fileIn = h("input", { type: "file", accept: ".pdf,.csv,.json,.md,.txt,.log" });
+
+  const addBtn = h("button", { class: "btn primary sm", onclick: async () => {
     if (!nameIn.value.trim()) { toast("Name required", "error"); return; }
-    intake.evidenceArtifacts.push({ name: nameIn.value.trim(), type: typeSel.value, uri: uriIn.value.trim() || null });
-    nameIn.value = ""; uriIn.value = ""; refresh();
+    const artifact = { name: nameIn.value.trim(), type: typeSel.value };
+    if (uriIn.value.trim()) artifact.uri = uriIn.value.trim();
+    const f = fileIn.files && fileIn.files[0];
+    if (f) {
+      if (f.size > 20 * 1024 * 1024) { toast("File exceeds 20 MB", "error"); return; }
+      const buf = await f.arrayBuffer();
+      const bytes = new Uint8Array(buf);
+      let bin = ""; for (let i = 0; i < bytes.length; i++) bin += String.fromCharCode(bytes[i]);
+      artifact.contentBase64 = btoa(bin);
+      artifact.mimeType = f.type || null;
+      if (!artifact.uri) artifact.uri = `upload://${f.name}`;
+      toast(`Loaded ${f.name} (${(f.size / 1024).toFixed(1)} KB)`, "info", 2500);
+    }
+    intake.evidenceArtifacts.push(artifact);
+    nameIn.value = ""; uriIn.value = ""; fileIn.value = "";
+    refresh();
   } }, "＋ Add");
   return h("div", { class: "field" },
     h("label", null, "Evidence artifacts submitted with this run ",
-      h("span", { class: "hint" }, "· cited by phases 1-9 against specific regulatory articles")),
+      h("span", { class: "hint" }, "· cited by phases 1-9 against specific regulatory articles · uploaded files are text-extracted & gap-analyzed server-side")),
     list,
     h("div", { class: "artifact-add" }, nameIn, typeSel, addBtn),
-    h("div", { class: "field" }, h("label", null, "URI (optional)"), uriIn),
+    h("div", { class: "field-row" },
+      h("div", { class: "field" }, h("label", null, "URI (optional)"), uriIn),
+      h("div", { class: "field" }, h("label", null, "File (optional — PDF / CSV / JSON / MD / TXT · max 20 MB)"), fileIn),
+    ),
   );
 }
 
@@ -891,6 +1063,8 @@ function phaseResultView(p, result) {
   const blockers = result.blockers || [];
   const cited = outputs.citedArtifacts || result.citedArtifacts || [];
   const missing = outputs.missingArtifacts || result.missingArtifacts || [];
+  const docGaps = outputs.documentGaps || result.documentGaps || [];
+  const gapSummary = outputs.documentGapSummary;
   const findings = outputs.findings || [];
 
   return h("div", { class: "phase-result " + s },
@@ -899,11 +1073,34 @@ function phaseResultView(p, result) {
       h("span", { class: "r-title" }, p.label + " — " + (s === "passed" ? "Passed" : "Blocked")),
       h("span", { class: "r-hash" }, "hash " + short(result.integrityHash, 22)),
     ),
+    gapSummary ? h("div", { style: "font-size: 11.5px; color: var(--ink-dim); margin-bottom: 12px; padding: 8px 12px; background: var(--bg); border: 1px solid var(--line-soft); border-radius: 6px;" },
+      h("b", { style: "color: var(--ink)" }, "Document gap analysis: "),
+      `${gapSummary.present} present · ${gapSummary.partial} partial · ${gapSummary.gap} gap · `,
+      h("b", { style: `color: var(--${gapSummary.blockerGaps > 0 ? "red" : "acc"})` }, `${gapSummary.blockerGaps} blocker`),
+      ", ",
+      h("b", { style: `color: var(--${gapSummary.warningGaps > 0 ? "amber" : "ink-dim"})` }, `${gapSummary.warningGaps} warning`),
+    ) : null,
     blockers.length ? h("div", null,
       h("div", { class: "tl-subhead" }, "Blockers"),
       ...blockers.map(b => h("div", { class: "blocker" },
         h("b", null, `${b.framework} ${b.article} — ${b.code}: ${b.reason}`),
         b.remediation ? h("div", { class: "rem" }, "Remediation: " + b.remediation) : null,
+      )),
+    ) : null,
+    docGaps.length ? h("div", null,
+      h("div", { class: "tl-subhead" }, "Document gap analysis — sections found / partial / missing"),
+      ...docGaps.map(g => h("div", { class: "cit-row" },
+        h("span", { class: "art-icon", style: `color: var(--${g.verdict === "gap" && g.severity === "blocker" ? "red" : g.verdict === "gap" ? "amber" : g.verdict === "partial" ? "amber" : g.verdict === "pending" ? "ink-dim" : "acc"})` },
+          g.verdict === "gap" ? "✗" : g.verdict === "partial" ? "!" : g.verdict === "pending" ? "○" : "✓"),
+        h("code", null, g.framework),
+        h("code", null, g.article),
+        h("div", { class: "art" },
+          h("b", null, g.section),
+          h("div", { class: "meta" }, g.artifactName + " · " + g.artifactType),
+          g.evidenceSpan ? h("div", { style: "color: var(--acc-2); font-size: 11px; margin-top: 3px; font-style: italic;" }, g.evidenceSpan) : null,
+          g.verdict !== "present" ? h("div", { class: "missing-note", style: `color: var(--${g.severity === "blocker" ? "red" : "amber"})` }, g.note) : null,
+        ),
+        h("span", { class: "pill " + (g.verdict === "gap" ? (g.severity === "blocker" ? "fail" : "warning") : g.verdict === "partial" ? "warning" : g.verdict === "pending" ? "muted" : "ok") }, g.verdict + " · " + g.severity),
       )),
     ) : null,
     cited.length ? h("div", null,
@@ -912,7 +1109,10 @@ function phaseResultView(p, result) {
         h("span", { class: "art-icon", style: `color: var(--${c.verdict === "fail" ? "red" : c.verdict === "warning" ? "amber" : "acc"})` }, c.verdict === "fail" ? "✗" : c.verdict === "warning" ? "!" : "✓"),
         h("code", null, c.framework),
         h("code", null, c.article),
-        h("div", { class: "art" }, h("b", null, c.name), h("div", { class: "meta" }, c.type + " · sha256 " + short(c.sha256, 12))),
+        h("div", { class: "art" },
+          h("b", null, c.name),
+          h("div", { class: "meta" }, c.type + " · sha256 " + short(c.sha256, 12) + (c.extractionStatus ? " · " + c.extractionStatus : "") + (c.gapScore != null ? ` · gap-score ${c.gapScore.toFixed(2)}` : "")),
+        ),
         h("span", { class: "pill " + c.verdict }, c.verdict),
       )),
     ) : null,
@@ -947,6 +1147,8 @@ route("runs/:runId", async (app, params) => {
 });
 
 function renderRunDetail(run) {
+  const totalGaps = (run.gaps || []).filter(g => g.verdict === "gap" && g.severity === "blocker").length;
+  const warnGaps = (run.gaps || []).filter(g => g.verdict === "gap" && g.severity === "warning").length;
   const container = h("div", { class: "main" },
     h("div", { class: "page-head" },
       h("div", null,
@@ -962,7 +1164,7 @@ function renderRunDetail(run) {
       h("div", { class: "card" }, h("h3", null, "Phases"), h("div", { class: "metric" }, `${run.phases.length}/9`), h("div", { class: "metric-sub" }, run.phases.filter(p => p.status === "passed").length + " passed, " + run.phases.filter(p => p.status === "blocked").length + " blocked")),
       h("div", { class: "card" }, h("h3", null, "Artifacts"), h("div", { class: "metric" }, run.artifacts?.length ?? 0), h("div", { class: "metric-sub" }, "Evidence documents submitted")),
       h("div", { class: "card" }, h("h3", null, "Citations"), h("div", { class: "metric" }, run.citations?.length ?? 0), h("div", { class: "metric-sub" }, "Artifact ↔ article mappings")),
-      h("div", { class: "card" }, h("h3", null, "Missing artifacts"), h("div", { class: "metric", style: "color: var(--red)" }, run.citations?.filter(c => c.verdict === "missing").length ?? 0), h("div", { class: "metric-sub" }, "Expected but not submitted")),
+      h("div", { class: "card" }, h("h3", null, "Document gaps"), h("div", { class: "metric", style: `color: var(--${totalGaps > 0 ? "red" : warnGaps > 0 ? "amber" : "acc"})` }, totalGaps + " / " + warnGaps), h("div", { class: "metric-sub" }, "Blocker · warning sections missing")),
     ),
     h("div", { class: "section" },
       h("div", { class: "section-head" }, h("h2", null, "9-Phase Timeline"), h("span", { class: "pill muted" }, "click a phase to expand")),
@@ -992,6 +1194,10 @@ function renderTimelinePhase(ph, run) {
   const citations = (run.citations || []).filter(c => c.phaseKey === ph.phase);
   const cited = citations.filter(c => c.verdict !== "missing");
   const missing = citations.filter(c => c.verdict === "missing");
+  const gaps = (run.gaps || []).filter(g => g.phaseKey === ph.phase);
+  const gapsBlocker = gaps.filter(g => g.verdict === "gap" && g.severity === "blocker");
+  const gapsWarning = gaps.filter(g => g.verdict === "gap" && g.severity === "warning");
+  const gapsPresent = gaps.filter(g => g.verdict === "present" || g.verdict === "partial");
 
   body.appendChild(h("div", { class: "tl-subhead" }, "Hash chain"));
   body.appendChild(h("div", { class: "hash-chain" }, h("b", null, "This: "), ph.integrityHash, h("br"), h("b", null, "Prev: "), ph.prevHash));
@@ -1001,6 +1207,24 @@ function renderTimelinePhase(ph, run) {
     ph.blockers.forEach(b => body.appendChild(h("div", { class: "blocker" },
       h("b", null, `${b.framework} ${b.article} — ${b.code}: ${b.reason}`),
       b.remediation ? h("div", { class: "rem" }, "Remediation: " + b.remediation) : null,
+    )));
+  }
+
+  if (gaps.length) {
+    body.appendChild(h("div", { class: "tl-subhead" },
+      `Document gap analysis — ${gapsBlocker.length} blocker · ${gapsWarning.length} warning · ${gapsPresent.length} present/partial`));
+    gaps.forEach(g => body.appendChild(h("div", { class: "cit-row" },
+      h("span", { class: "art-icon", style: `color: var(--${g.verdict === "gap" && g.severity === "blocker" ? "red" : g.verdict === "gap" ? "amber" : g.verdict === "partial" ? "amber" : "acc"})` },
+        g.verdict === "gap" ? "✗" : g.verdict === "partial" ? "!" : "✓"),
+      h("code", null, g.framework),
+      h("code", null, g.article),
+      h("div", { class: "art" },
+        h("b", null, g.section),
+        h("div", { class: "meta" }, (g.artifactName || "?") + " · " + (g.artifactType || "?")),
+        g.evidenceSpan ? h("div", { style: "color: var(--acc-2); font-size: 11px; margin-top: 3px; font-style: italic;" }, g.evidenceSpan) : null,
+        g.verdict !== "present" ? h("div", { class: "missing-note", style: `color: var(--${g.severity === "blocker" ? "red" : "amber"})` }, g.note) : null,
+      ),
+      h("span", { class: "pill " + (g.verdict === "gap" ? (g.severity === "blocker" ? "fail" : "warning") : g.verdict === "partial" ? "warning" : "ok") }, g.verdict + " · " + g.severity),
     )));
   }
 
@@ -1048,13 +1272,21 @@ function humanizePhase(k) {
 function artifactTable(arts, cits) {
   if (!arts.length) return h("div", { class: "empty" }, "No artifacts submitted for this run.");
   return h("table", null,
-    h("thead", null, h("tr", null, ...["Name", "Type", "URI", "sha256", "Cited in phases", "Submitted"].map(t => h("th", null, t)))),
+    h("thead", null, h("tr", null, ...["Name", "Type", "Extraction", "Gap score", "sha256", "Cited in phases", "Submitted"].map(t => h("th", null, t)))),
     h("tbody", null, ...arts.map(a => {
       const phases = [...new Set(cits.filter(c => c.artifactId === a.artifactId).map(c => c.phaseKey))];
+      const g = a.gapScore;
+      const gPill = g == null ? h("span", { class: "pill muted" }, "—") :
+                    h("span", { class: "pill " + (g >= 0.8 ? "ok" : g >= 0.5 ? "warning" : "fail") },
+                      (g * 100).toFixed(0) + "%");
       return h("tr", null,
-        h("td", null, a.name),
+        h("td", null, h("b", null, a.name), a.uri ? h("div", { style: "font-size: 10.5px; color: var(--ink-mute); font-family: var(--mono); margin-top: 2px;" }, short(a.uri, 60)) : null),
         h("td", null, h("code", null, a.type)),
-        h("td", null, a.uri ? h("code", null, short(a.uri, 40)) : "—"),
+        h("td", null,
+          h("span", { class: "pill " + (a.extractionStatus === "extracted" ? "ok" : a.extractionStatus === "pending" ? "muted" : "warning") }, a.extractionStatus || "—"),
+          a.extractedChars ? h("div", { style: "font-size: 10.5px; color: var(--ink-mute); margin-top: 2px;" }, `${a.extractedChars} chars`) : null,
+        ),
+        h("td", null, gPill),
         h("td", null, h("code", null, short(a.sha256, 12))),
         h("td", null, phases.length ? phases.map(p => h("span", { class: "tag" }, p)) : h("span", { class: "pill muted" }, "not cited")),
         h("td", null, fmtDate(a.submittedAt)),

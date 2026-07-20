@@ -126,19 +126,26 @@ def _default_verdict(phase_key: str, outputs: dict, blockers: list[dict],
 
 async def build_phase_citations(run_id: str, phase_key: str, outputs: dict,
                                 blockers: list[dict]) -> tuple[
-                                    list[dict], list[dict], list[dict]]:
-    """Return (citations_for_persist, cited_artifacts, missing_expectations).
+                                    list[dict], list[dict], list[dict], list[dict]]:
+    """Return (citations_for_persist, cited_artifacts, missing_expectations,
+    document_gaps).
 
     - citations_for_persist: rows to insert into governance_phase_citations
     - cited_artifacts: [{artifactId, name, type, sha256, framework, article,
-                         control, verdict}]  — reflected in the phase outputs
+                         control, verdict, gapScore}]  — reflected in the phase outputs
     - missing_expectations: [{expectedType, framework, article, control,
                               reason}]  — reflected in phase outputs
+    - document_gaps: [{artifactId, artifactName, artifactType, framework, article,
+                        section, verdict, severity, evidenceSpan, note}]  —
+                     the diagnostic gap-analysis findings for every cited
+                     document, so the UI can answer "what's missing inside
+                     the DPIA that we uploaded".
     """
     expectations = PHASE_EXPECTATIONS.get(phase_key, [])
     citations: list[dict] = []
     cited: list[dict] = []
     missing: list[dict] = []
+    document_gaps: list[dict] = []
 
     for expected_type, framework, article, control in expectations:
         arts = await artifact_store.get_artifacts_by_type(run_id, expected_type)
@@ -146,7 +153,21 @@ async def build_phase_citations(run_id: str, phase_key: str, outputs: dict,
             for a in arts:
                 verdict = _default_verdict(phase_key, outputs, blockers,
                                            expected_type, True, framework, article)
-                note = f"Inspected {a['name']} (sha256 {a['sha256'][:10]}…)"
+                # Merge in gap-analysis signal: if any blocker-severity gap
+                # exists in this artifact, force fail; else if warning-severity
+                # gap → warning; else present/pass stays.
+                worst_gap = _worst_gap_for(a, framework, article)
+                if worst_gap == "blocker":
+                    verdict = "fail"
+                elif worst_gap == "warning" and verdict in ("pass", "present"):
+                    verdict = "warning"
+
+                gap_score = a.get("gapScore")
+                gap_hint = (f" · gap-score {gap_score:.2f}"
+                            if gap_score is not None else "")
+                ext_status = a.get("extractionStatus") or "pending"
+                note = (f"Inspected {a['name']} (sha256 {a['sha256'][:10]}…) "
+                        f"[{ext_status}]{gap_hint}")
                 citations.append({
                     "artifactId": a["artifactId"], "expectedType": expected_type,
                     "framework": framework, "article": article,
@@ -155,7 +176,27 @@ async def build_phase_citations(run_id: str, phase_key: str, outputs: dict,
                     "artifactId": a["artifactId"], "name": a["name"],
                     "type": a["type"], "sha256": a["sha256"],
                     "framework": framework, "article": article,
-                    "control": control, "verdict": verdict})
+                    "control": control, "verdict": verdict,
+                    "extractionStatus": ext_status,
+                    "gapScore": gap_score})
+                # Emit per-section gap findings for this artifact (deduped
+                # across expectations — an artifact is analyzed once).
+                for gf in (a.get("gapFindings") or []):
+                    if not any(dg["artifactId"] == gf["artifactId"]
+                               and dg["section"] == gf["section"]
+                               for dg in document_gaps):
+                        document_gaps.append({
+                            "artifactId": gf["artifactId"],
+                            "artifactName": a["name"],
+                            "artifactType": expected_type,
+                            "framework": gf["framework"],
+                            "article": gf["article"],
+                            "section": gf["section"],
+                            "verdict": gf["verdict"],
+                            "severity": gf["severity"],
+                            "evidenceSpan": gf.get("evidenceSpan", ""),
+                            "note": gf.get("note", ""),
+                        })
         else:
             reason = (f"No {expected_type} artifact submitted for run — "
                       f"cannot evidence {framework} {article} ({control}).")
@@ -167,4 +208,28 @@ async def build_phase_citations(run_id: str, phase_key: str, outputs: dict,
                 "expectedType": expected_type, "framework": framework,
                 "article": article, "control": control, "reason": reason})
 
-    return citations, cited, missing
+    return citations, cited, missing, document_gaps
+
+
+def _worst_gap_for(artifact: dict, framework: str, article: str) -> Optional[str]:
+    """Highest gap severity in this artifact scoped to (framework, article).
+
+    Returns 'blocker' > 'warning' > None. If the gap-analysis flagged a gap
+    (not merely partial) for the sub-article we're testing, return that
+    severity — so the citation verdict can escalate accordingly.
+    """
+    worst: Optional[str] = None
+    for g in artifact.get("gapFindings") or []:
+        if g["verdict"] != "gap":
+            continue
+        # Match either exact article or a parent article (Art. 35 covers Art. 35(7)(a))
+        if g["framework"] != framework:
+            continue
+        ga = g["article"]
+        if not (ga == article or ga.startswith(article + "(") or article.startswith(ga + "(")):
+            continue
+        if g["severity"] == "blocker":
+            return "blocker"
+        if g["severity"] == "warning":
+            worst = "warning"
+    return worst
