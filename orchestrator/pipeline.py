@@ -11,9 +11,11 @@ from engines import (explainability_engine, fairness_engine, privacy_engine,
                      risk_engine, robustness_engine)
 from events.fabric import fabric
 from graph import lineage
+from orchestrator import citations as citations_mod
 from orchestrator import scoping
 from orchestrator.config import status_base_url
 from orchestrator.state_machine import PHASE_NUMBERS, PipelineError, ensure_can_execute
+from store import artifacts as artifact_store
 from store import evidence as store
 from store.hashing import integrity_hash, run_genesis_hash
 from certs import issuer as vc_issuer
@@ -51,10 +53,25 @@ async def _persist_phase(run: dict, phase_key: str, status: str, inputs: dict,
                          actor: str, prev_hash: str) -> dict:
     run_id = run["run_id"]
     control_version = CONTROL_VERSIONS[phase_key]
+
+    # Build article-level citations against the submitted evidence artifacts.
+    persist_citations, cited_artifacts, missing_artifacts = \
+        await citations_mod.build_phase_citations(run_id, phase_key, outputs, blockers)
+    outputs = {**outputs,
+               "citedArtifacts": cited_artifacts,
+               "missingArtifacts": missing_artifacts,
+               "articleCitations": [
+                   {"expectedType": c["expectedType"],
+                    "framework": c["framework"], "article": c["article"],
+                    "control": c["control"], "verdict": c["verdict"],
+                    "artifactId": c.get("artifactId"), "note": c.get("note")}
+                   for c in persist_citations]}
+
     ih = integrity_hash(run_id, phase_key, control_version, inputs, outputs, prev_hash)
     meta = await store.insert_phase_result(
         run_id, phase_key, PHASE_NUMBERS[phase_key], status, inputs, outputs,
         articles, blockers, control_version, ih, prev_hash, actor=actor)
+    await artifact_store.insert_citations(run_id, phase_key, persist_citations)
     await lineage.record_phase(
         run_id, phase_key, PHASE_NUMBERS[phase_key], status, meta["result_id"],
         meta["evidence_id"], ih, control_version, articles, blockers)
@@ -68,6 +85,7 @@ async def _persist_phase(run: dict, phase_key: str, status: str, inputs: dict,
         "status": status, "controlVersion": control_version, "integrityHash": ih,
         "prevHash": prev_hash, "evidenceId": meta["evidence_id"],
         "legalMappings": articles, "blockers": blockers, "outputs": outputs,
+        "citedArtifacts": cited_artifacts, "missingArtifacts": missing_artifacts,
         "completedAt": meta["created_at"],
     }
 
@@ -90,6 +108,14 @@ async def execute_intake(inputs: dict, actor: str,
                                     reaudit_of=reaudit_of, trigger=trigger)
     await lineage.record_intake(run_id, inputs["modelId"], inputs["modelVersion"],
                                 activities, context["datasets"], reaudit_of=reaudit_of)
+
+    # Persist any evidence artifacts submitted with the intake payload so that
+    # subsequent phase engines can cite them under specific regulatory articles.
+    submitted_artifacts: list[dict] = []
+    for art in inputs.get("evidenceArtifacts", []) or []:
+        stored = await artifact_store.insert_artifact(run_id, art, submitted_by=actor)
+        submitted_artifacts.append(stored)
+
     outputs = {
         "modelId": inputs["modelId"],
         "modelVersion": inputs["modelVersion"],
@@ -101,7 +127,9 @@ async def execute_intake(inputs: dict, actor: str,
             "autonomyLevel": context["deploymentContext"].get("autonomyLevel", "assistive"),
             "activityCount": len(activities),
             "datasetCount": len(context["datasets"]),
+            "artifactCount": len(submitted_artifacts),
         },
+        "registeredArtifacts": submitted_artifacts,
     }
     run = {"run_id": run_id, "status": "in_progress", "context": context}
     return await _persist_phase(run, "intake", "passed", inputs, outputs,

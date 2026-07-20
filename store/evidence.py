@@ -70,6 +70,66 @@ async def latest_certified_run(model_id: str) -> Optional[dict]:
     return _row_to_dict(row) if row else None
 
 
+async def list_runs(model_id: Optional[str] = None,
+                    status: Optional[str] = None,
+                    limit: int = 50) -> list[dict]:
+    q = "SELECT * FROM governance_runs"
+    args: list = []
+    where: list[str] = []
+    if model_id:
+        args.append(model_id)
+        where.append(f"model_id=${len(args)}")
+    if status:
+        args.append(status)
+        where.append(f"status=${len(args)}")
+    if where:
+        q += " WHERE " + " AND ".join(where)
+    q += f" ORDER BY created_at DESC LIMIT {int(limit)}"
+    async with db.pool.acquire() as conn:
+        rows = await conn.fetch(q, *args)
+    out: list[dict] = []
+    for r in rows:
+        d = _row_to_dict(r)
+        out.append({"runId": d["run_id"], "modelId": d["model_id"],
+                    "modelVersion": d["model_version"], "status": d["status"],
+                    "reauditOf": d.get("reaudit_of"),
+                    "createdAt": d["created_at"], "updatedAt": d["updated_at"]})
+    return out
+
+
+async def list_certificates(model_id: Optional[str] = None,
+                            status: Optional[str] = None,
+                            limit: int = 50) -> list[dict]:
+    q = ("SELECT certificate_id, run_id, model_id, status, supersedes, "
+         "superseded_by, anchor_hash, issued_at, expires_at, revoked_at, "
+         "revocation_reason FROM governance_certificates")
+    args: list = []
+    where: list[str] = []
+    if model_id:
+        args.append(model_id)
+        where.append(f"model_id=${len(args)}")
+    if status:
+        args.append(status)
+        where.append(f"status=${len(args)}")
+    if where:
+        q += " WHERE " + " AND ".join(where)
+    q += f" ORDER BY issued_at DESC LIMIT {int(limit)}"
+    async with db.pool.acquire() as conn:
+        rows = await conn.fetch(q, *args)
+    out = []
+    for r in rows:
+        d = _row_to_dict(r)
+        out.append({
+            "certificateId": d["certificate_id"], "runId": d["run_id"],
+            "modelId": d["model_id"], "status": d["status"],
+            "supersedes": d.get("supersedes"), "supersededBy": d.get("superseded_by"),
+            "anchorHash": d["anchor_hash"], "issuedAt": d["issued_at"],
+            "expiresAt": d.get("expires_at"), "revokedAt": d.get("revoked_at"),
+            "revocationReason": d.get("revocation_reason"),
+        })
+    return out
+
+
 # ─── Phase results ───────────────────────────────────────────────
 
 async def insert_phase_result(run_id: str, phase_key: str, phase_number: int, status: str,

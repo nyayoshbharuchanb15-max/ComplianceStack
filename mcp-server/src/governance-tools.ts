@@ -88,6 +88,36 @@ export const GOVERNANCE_TOOL_SCHEMAS: ToolSchemaEntry[] = [
           },
           default: [],
         },
+        evidenceArtifacts: {
+          type: "array",
+          maxItems: 200,
+          description:
+            "Compliance documents/records submitted as evidence for this audit run — cited by every phase " +
+            "against the specific regulatory articles they evidence. Types: model_card, dpia, dataset_lineage, " +
+            "bias_test_output, robustness_test_log, explainability_report, oversight_procedure, etc.",
+          items: {
+            type: "object",
+            properties: {
+              artifactId: { type: "string", maxLength: 100 },
+              name: { type: "string", minLength: 1, maxLength: 500 },
+              type: {
+                type: "string",
+                pattern: "^[a-z_]+$",
+                maxLength: 100,
+                description: "Artifact category (see PHASE_EXPECTATIONS in orchestrator/citations.py).",
+              },
+              uri: { type: "string", maxLength: 1000 },
+              mimeType: { type: "string", maxLength: 150 },
+              contentSnippet: { type: "string", maxLength: 4000 },
+              sha256: { type: "string", maxLength: 64 },
+              sizeBytes: { type: "integer", minimum: 0 },
+              tags: { type: "array", items: { type: "string" }, maxItems: 20, default: [] },
+            },
+            required: ["name", "type"],
+            additionalProperties: false,
+          },
+          default: [],
+        },
       },
       required: ["modelId", "modelVersion"],
       additionalProperties: false,

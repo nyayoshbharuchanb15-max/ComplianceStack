@@ -951,7 +951,7 @@ async function main() {
     // ── SSE Transport ────────────────────────────────────────────
     const app = express();
     app.use(express.json());
-    app.use(validateOrigin(allowedOrigins));
+    const sseOriginGuard = validateOrigin(allowedOrigins);
     const transports: Map<string, SSEServerTransport> = new Map();
 
     app.get("/health", (_req, res) => {
@@ -964,7 +964,7 @@ async function main() {
       });
     });
 
-    app.get("/sse", async (req, res) => {
+    app.get("/sse", sseOriginGuard, async (req, res) => {
       const transport = new SSEServerTransport("/messages", res);
       const sessionId = transport.sessionId;
       transports.set(sessionId, transport);
@@ -972,7 +972,7 @@ async function main() {
       await server.connect(transport);
     });
 
-    app.post("/messages", async (req, res) => {
+    app.post("/messages", sseOriginGuard, async (req, res) => {
       const sessionId = req.query.sessionId as string;
       const transport = transports.get(sessionId);
       if (transport) {
@@ -1003,11 +1003,26 @@ async function main() {
       ({ StreamableHTTPSessionManager }) => {
         const app = express();
         app.use(express.json({ limit: "10mb" }));
-        app.use(validateOrigin(allowedOrigins));
+        const originGuard = validateOrigin(allowedOrigins);
         const sessionManager = new StreamableHTTPSessionManager();
         sessionManager.startCleanup();
 
         app.get("/", async (_req, res) => {
+          const { renderWorkbenchShell } = await import("./workbench.js");
+          res.type("html").send(renderWorkbenchShell(SERVER_VERSION));
+        });
+
+        app.get("/assets/workbench.js", async (_req, res) => {
+          const { getWorkbenchJs } = await import("./workbench.js");
+          res.type("application/javascript").send(getWorkbenchJs());
+        });
+
+        app.get("/assets/workbench.css", async (_req, res) => {
+          const { getWorkbenchCss } = await import("./workbench.js");
+          res.type("text/css").send(getWorkbenchCss());
+        });
+
+        app.get("/status", async (_req, res) => {
           const { buildStatusPage } = await import("./status-page.js");
           res.type("html").send(await buildStatusPage(sessionManager.sessionCount, SERVER_VERSION));
         });
@@ -1024,7 +1039,7 @@ async function main() {
         });
 
         // POST /mcp — Main MCP endpoint
-        app.post("/mcp", async (req, res) => {
+        app.post("/mcp", originGuard, async (req, res) => {
           const sessionId = req.headers["mcp-session-id"] as string | undefined;
 
           if (!sessionId) {
@@ -1058,7 +1073,7 @@ async function main() {
         });
 
         // GET /mcp — SSE stream for server-initiated messages
-        app.get("/mcp", async (req, res) => {
+        app.get("/mcp", originGuard, async (req, res) => {
           const sessionId = req.headers["mcp-session-id"] as string | undefined;
           if (!sessionId) {
             res.status(400).json({ error: "mcp-session-id header required" });
@@ -1097,7 +1112,7 @@ async function main() {
         });
 
         // DELETE /mcp — Session termination
-        app.delete("/mcp", async (req, res) => {
+        app.delete("/mcp", originGuard, async (req, res) => {
           const sessionId = req.headers["mcp-session-id"] as string | undefined;
           if (sessionId) {
             const terminated = await sessionManager.terminateSession(sessionId);

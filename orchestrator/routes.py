@@ -12,6 +12,7 @@ from graph import lineage
 from orchestrator import pipeline, reaudit
 from orchestrator.auth import issue_token, require_scope
 from orchestrator.state_machine import PipelineError
+from store import artifacts as artifact_store
 from store import evidence as store
 
 router = APIRouter(prefix="/api/v1")
@@ -60,6 +61,22 @@ class DatasetRef(BaseModel):
     specialCategories: list[str] = Field(default_factory=list)
 
 
+class EvidenceArtifact(BaseModel):
+    """A document/record submitted as compliance evidence for an audit run."""
+    artifactId: Optional[str] = None
+    name: str
+    type: str = Field(pattern=r"^[a-z_]+$",
+                      description="Artifact category, e.g. model_card, dpia, "
+                                  "bias_test_output, robustness_test_log, "
+                                  "explainability_report, oversight_procedure.")
+    uri: Optional[str] = None
+    mimeType: Optional[str] = None
+    contentSnippet: Optional[str] = None
+    sha256: Optional[str] = None
+    sizeBytes: Optional[int] = None
+    tags: list[str] = Field(default_factory=list)
+
+
 class IntakeRequest(BaseModel):
     modelId: str = Field(pattern=r"^[a-zA-Z0-9][a-zA-Z0-9._-]*$", max_length=255)
     modelVersion: str
@@ -67,6 +84,11 @@ class IntakeRequest(BaseModel):
     deploymentContext: DeploymentContext = Field(default_factory=DeploymentContext)
     processingActivities: list[ProcessingActivity] = Field(default_factory=list)
     datasets: list[DatasetRef] = Field(default_factory=list)
+    evidenceArtifacts: list[EvidenceArtifact] = Field(default_factory=list)
+
+
+class ArtifactUploadRequest(BaseModel):
+    artifacts: list[EvidenceArtifact]
 
 
 class RunScoped(BaseModel):
@@ -282,6 +304,22 @@ async def trigger_reaudit(req: ReauditRequest,
 
 # ─── Runs ────────────────────────────────────────────────────────
 
+class RunListQuery(BaseModel):
+    modelId: Optional[str] = None
+    status: Optional[str] = None
+    limit: int = Field(default=50, ge=1, le=200)
+
+
+@router.get("/runs")
+async def list_runs(modelId: Optional[str] = None,
+                    status: Optional[str] = None,
+                    limit: int = 50,
+                    claims: dict = Depends(require_scope("runs:read"))):
+    rows = await store.list_runs(model_id=modelId, status=status,
+                                  limit=max(1, min(200, limit)))
+    return {"runs": rows}
+
+
 @router.get("/runs/{run_id}")
 async def get_run(run_id: str, claims: dict = Depends(require_scope("runs:read"))):
     run = await store.get_run(run_id)
@@ -290,16 +328,25 @@ async def get_run(run_id: str, claims: dict = Depends(require_scope("runs:read")
                                                      "message": f"Run {run_id} not found"})
     results = await store.get_phase_results(run_id)
     cert = await store.get_certificate_for_run(run_id)
+    citations = await artifact_store.list_citations(run_id)
+    arts = await artifact_store.list_artifacts(run_id)
     return {
         "runId": run_id, "modelId": run["model_id"], "modelVersion": run["model_version"],
         "status": run["status"], "reauditOf": run.get("reaudit_of"),
-        "trigger": run.get("trigger"),
+        "trigger": run.get("trigger"), "createdAt": run.get("created_at"),
+        "updatedAt": run.get("updated_at"),
+        "context": run.get("context"),
         "phases": [{"phase": r["phase_key"], "phaseNumber": r["phase_number"],
                     "status": r["status"], "integrityHash": r["integrity_hash"],
                     "prevHash": r["prev_hash"], "evidenceId": r["evidence_id"],
                     "carriedForward": r["carried_forward"],
-                    "blockers": r["blocker_reasons"], "completedAt": r["created_at"]}
+                    "blockers": r["blocker_reasons"],
+                    "outputs": r["outputs"],
+                    "legalMappings": r["legal_mappings"],
+                    "completedAt": r["created_at"]}
                    for r in results],
+        "artifacts": arts,
+        "citations": citations,
         "certificateId": cert["certificate_id"] if cert else None,
     }
 
@@ -309,7 +356,43 @@ async def get_run_lineage(run_id: str, claims: dict = Depends(require_scope("run
     return await lineage.get_run_lineage(run_id)
 
 
+# ─── Artifacts (per-run evidence documents) ──────────────────────
+
+@router.post("/runs/{run_id}/artifacts")
+async def upload_artifacts(run_id: str, req: ArtifactUploadRequest,
+                           claims: dict = Depends(require_scope("phase:intake"))):
+    run = await store.get_run(run_id)
+    if not run:
+        raise HTTPException(status_code=404, detail={
+            "code": "RUN_NOT_FOUND", "message": f"Run {run_id} not found"})
+    stored: list[dict] = []
+    for art in req.artifacts:
+        stored.append(await artifact_store.insert_artifact(
+            run_id, art.model_dump(exclude_none=True), submitted_by=claims["sub"]))
+    return {"runId": run_id, "artifacts": stored}
+
+
+@router.get("/runs/{run_id}/artifacts")
+async def list_run_artifacts(run_id: str,
+                             claims: dict = Depends(require_scope("runs:read"))):
+    run = await store.get_run(run_id)
+    if not run:
+        raise HTTPException(status_code=404, detail={
+            "code": "RUN_NOT_FOUND", "message": f"Run {run_id} not found"})
+    return {"runId": run_id,
+            "artifacts": await artifact_store.list_artifacts(run_id),
+            "citations": await artifact_store.list_citations(run_id)}
+
+
 # ─── Certificates ────────────────────────────────────────────────
+
+@router.get("/certificates")
+async def list_certificates(modelId: Optional[str] = None,
+                            status: Optional[str] = None,
+                            limit: int = 50,
+                            claims: dict = Depends(require_scope("certs:read"))):
+    return {"certificates": await store.list_certificates(
+        model_id=modelId, status=status, limit=max(1, min(200, limit)))}
 
 @router.get("/certificates/{certificate_id}")
 async def get_certificate(certificate_id: str,
@@ -347,6 +430,22 @@ async def certificate_status(certificate_id: str):
             "revokedAt": cert.get("revoked_at"),
             "revocationReason": cert.get("revocation_reason"),
             "supersededBy": cert.get("superseded_by")}
+
+
+class RevokeRequest(BaseModel):
+    reason: str = Field(min_length=3, max_length=500)
+
+
+@router.post("/certificates/{certificate_id}/revoke")
+async def revoke_certificate(certificate_id: str, req: RevokeRequest,
+                             claims: dict = Depends(require_scope("certs:read"))):
+    ok = await store.revoke_certificate(certificate_id, req.reason)
+    if not ok:
+        raise HTTPException(status_code=404, detail={
+            "code": "CERT_NOT_REVOCABLE",
+            "message": "Certificate not found or already revoked"})
+    await lineage.set_certificate_status(certificate_id, "revoked")
+    return {"certificateId": certificate_id, "status": "revoked", "reason": req.reason}
 
 
 # ─── Monitoring observations ─────────────────────────────────────

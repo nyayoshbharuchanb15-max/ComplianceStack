@@ -1,0 +1,31 @@
+{
+  "summary": "Full backend + SPA testing of the Auditor Workbench iteration adding evidence artifacts + per-phase article-level citations. 11/11 backend pytest cases pass against the preview URL (6 artifacts_and_citations + 5 new_backend_endpoints covering auth for all 4 roles, bad-secret 401, runs list, certificates list, and full revoke flow with GET verification). SPA fully exercised: login redirect, 4 role cards, dashboard (4 health cards + Recent Audit Runs + Recent Certificates populated from API), 8-item sidebar nav with hotkeys, New Audit wizard with 9 steps and 18 pre-filled evidence artifacts, one-click 'Run full demo audit' completing all 9 phases with green checks in ~15s, final Monitoring panel showing EU-AI-ACT Art.72 -> Monitoring Dashboard (present) and ISO-42001 Clause 9.1 missing incident_report, run detail (#/runs/:id) with 4 KPIs (Phases 9/9, Artifacts 18, Citations 23, Missing 1), 9-phase timeline with hash chain + ARTICLES EVIDENCED — ARTIFACTS INSPECTED (Fairness cites EU-AI-ACT Art.10 -> Bias Test Output -> pass and NIST-AI-RMF MEASURE 2.2 -> Fairness Metrics Report -> pass), Certificates list with detail page (schemaValid/signatureValid/notExpired/notRevoked = PASS + credentialSubject JSON + Revoke button), Verify Certificate flow returns verified=PASS, Event Ledger 'Recent Events (delivered)' table with Event/Phase/Run/Status/Attempts/At columns, Reaudit form, and MCP/API page with curl examples and all 11 governance tools (intake_register, map_regulatory_scope, classify_risk, check_data_protection, evaluate_fairness, test_robustness, verify_explainability, assemble_certification, configure_monitoring, trigger_reaudit, get_audit_run). Signout clears sessionStorage and redirects to #/login; protected routes redirect to #/login when logged out.",
+  "backend_issues": {"critical": [], "minor": []},
+  "frontend_issues": {
+    "ui_bugs": [
+      {"component": "Route guard (workbench.js)", "issue": "Guest access to #/verify is blocked — when sessionStorage has no token, navigating to /#/verify redirects to /#/login. Spec requires /verify to be a public/guest-only route because /api/v1/certificates/{id}/verify is a public endpoint. Sign-out flow currently prevents an unauthenticated user from validating a certificate URN they received externally.", "selector": "hash router in /app/mcp-server/ui/workbench.js", "priority": "MEDIUM"}
+    ],
+    "integration_issues": [],
+    "design_issues": []
+  },
+  "test_report_links": [
+    "/app/tests/governance/test_artifacts_and_citations.py",
+    "/app/tests/governance/test_new_backend_endpoints.py",
+    "/app/test_reports/pytest/artifacts_citations.xml",
+    "/app/test_reports/pytest/new_endpoints.xml"
+  ],
+  "action_items": [
+    "Fix route guard in /app/mcp-server/ui/workbench.js so that #/verify is accessible without a session token (public/guest route). All other routes correctly redirect to #/login as expected."
+  ],
+  "critical_code_review_comments": [],
+  "updated_files": [
+    "/app/tests/governance/test_new_backend_endpoints.py (new)"
+  ],
+  "success_rate": {"backend": "100% (11/11 new + 6/6 artifacts/citations preview URL)", "frontend": "~95% (all core flows work; one route-guard bug on /verify guest access)"},
+  "test_credentials": "governance-admin/govern-admin-secret-dev; intake-officer/intake-officer-secret-dev; audit-engineer/audit-engineer-secret-dev; certification-officer/certification-officer-secret-dev",
+  "seed_data_creation": "Demo audit run 8880f2b1-eb34-4a29-be04-4ff335b6b42e created via wizard (demo-cvscreener-mrt19cvl). One TEST_ revoke performed on an active certificate during test_certificate_revoke_flow.",
+  "retest_needed": false,
+  "main_agent_can_self_test": true,
+  "context_for_next_testing_agent": "SPA at /, hash routing (#/login, #/dashboard, #/audit/new, #/runs/:id, #/certificates, #/certificates/:id, #/verify, #/events, #/reaudit, #/mcp). Wizard 'Run full demo audit' button seeds 18 artifacts and runs 9 phases sequentially in ~12-15s. Run detail hash-chain visible per phase; ARTICLES EVIDENCED — ARTIFACTS INSPECTED section renders per-phase citations. New pytest file at /app/tests/governance/test_new_backend_endpoints.py exercises auth/runs/certificates/revoke.",
+  "rca of the issue": "Guest /verify redirect: the SPA's hash-router guard in /app/mcp-server/ui/workbench.js appears to require a session token for every route except #/login. The /api/v1/certificates/{id}/verify endpoint is public (no auth header needed), so the UI page should also be reachable without a session. Fix: whitelist '#/verify' (and possibly '#/login') in the route guard so unauthenticated users see the Verify Certificate form."
+}
