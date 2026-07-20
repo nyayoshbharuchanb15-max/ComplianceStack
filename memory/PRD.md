@@ -67,6 +67,9 @@ neo4j/governance_secret, started via `neo4j start`). After pod restart: `service
 start; redis-server --daemonize yes; neo4j start` then restart supervisor backend/frontend.
 
 ## Backlog / next
+- DONE (2026-06): GET / on the MCP server (port 3000) serves a live status console
+  (mcp-server/src/status-page.ts) — orchestrator/Postgres/Neo4j/Redis/signer health,
+  9-phase table, recent evidence events, curl quickstart.
 - P1: fix pre-existing streamable-http session lifecycle in mcp-server transport
 - P1: GET /api/v1/runs?modelId= listing endpoint
 - P2: NATS option for the event fabric; RFC 3161 timestamp anchoring for governance certs

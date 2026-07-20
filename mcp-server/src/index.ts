@@ -1007,6 +1007,11 @@ async function main() {
         const sessionManager = new StreamableHTTPSessionManager();
         sessionManager.startCleanup();
 
+        app.get("/", async (_req, res) => {
+          const { buildStatusPage } = await import("./status-page.js");
+          res.type("html").send(await buildStatusPage(sessionManager.sessionCount, SERVER_VERSION));
+        });
+
         app.get("/health", (_req, res) => {
           res.json({
             status: "ok",
