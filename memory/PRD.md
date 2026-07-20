@@ -60,6 +60,70 @@ Reaudit impact matrix in AUDIT_PIPELINE.md §11; updatedPhaseInputs carries trig
 - Known pre-existing quirk (NOT introduced here): custom streamable-http transport
   terminates session on connection close (index.ts res.on("close")) — stdio is canonical.
 
+## 2026-02 iteration (part 4) — security-fix test refactor + Emergent Google Sign-In
+User asked for two things: (1) verify the security patches from part 3 (hardcoded
+default secrets removed, VC pubkey pinned, atomic cert revocation) actually stick
+by rebuilding the test suite around env-sourced secrets; and (2) add
+"Sign in with Google" so a human auditor can log in without needing a client-
+credentials secret from the vault. Per user product decision, Google-authenticated
+users are minted a **governance-admin** JWT (full scopes).
+
+**Test suite refactor**
+- `/app/tests/governance/conftest.py` — reads `/app/backend/.env` once and
+  exports a `CREDS` dict pulled from `GOV_ADMIN_SECRET` / `GOV_INTAKE_SECRET`
+  / `GOV_AUDIT_SECRET` / `GOV_CERT_SECRET`. Raises RuntimeError at collection
+  if any env var is unset.
+- All 4 pre-existing test modules (`test_new_backend_endpoints.py`,
+  `test_artifacts_and_citations.py`, `test_gap_analysis.py`,
+  `test_governance_pipeline.py`) refactored to import `CREDS` from
+  `conftest` — zero hardcoded secrets remain in `/app/tests`.
+- `/app/mcp-server/src/governance-client.ts` — removed the
+  `|| "govern-admin-secret-dev"` fallback; unset env var now yields empty
+  string so the client fails fast against the orchestrator (which returns
+  401 INVALID_CLIENT). `dist/` rebuilt.
+
+**Emergent-managed Google Sign-In**
+- `/app/orchestrator/google_auth.py` — one module implementing the full
+  playbook: fetches Emergent's `/session-data` endpoint, persists the
+  session in Postgres, mints an HS256 governance JWT bound to role
+  `governance-admin`, and sets an HttpOnly + Secure + SameSite=None
+  `governance_session` cookie. Testing-only escape hatch guarded by
+  `GOV_ALLOW_TEST_AUTH=1` + matching `GOOGLE_AUTH_TEST_SESSION_ID`
+  allows deterministic backend tests without depending on
+  `demobackend.emergentagent.com`.
+- `/app/orchestrator/routes.py` — three new endpoints under `/api/v1`:
+  `POST /auth/google/session`, `GET /auth/me`, `POST /auth/logout`.
+- `/app/orchestrator/main.py` — CORS middleware with `allow_credentials=True`
+  and regex `.*` (echoes request origin per starlette's rules; env var
+  `CORS_ORIGINS` overrides).
+- `/app/store/migrations/005_google_auth.sql` — `governance_google_sessions`
+  table (session_token PK, user_id/email/name/picture/role, TTL 7 days).
+- `/app/mcp-server/ui/workbench.js` — top-level `load` handler now detects
+  `#session_id=` in the URL fragment BEFORE the router runs, exchanges it
+  against `/api/v1/auth/google/session`, scrubs the hash, and lands on
+  `#/dashboard`. Login page has a prominent "Sign in with Google" button
+  (`data-testid="login-google-btn"`) above the service-account cards.
+  Sign-out now fires `POST /api/v1/auth/logout` before clearing
+  sessionStorage. `fetch` calls include `credentials: "include"` so the
+  session cookie flows.
+- `/app/mcp-server/ui/workbench.css` — `.google-btn` styled with the
+  four-quadrant conic gradient Google icon and `.or-divider` between
+  Google + service accounts.
+- `/app/tests/governance/test_google_auth.py` — 8 new pytest cases
+  covering all endpoints + JWT usability + logout.
+
+**Data-plane recovery**
+- Pod restart wiped Postgres/Neo4j/Redis binaries. Reinstalled Postgres 15,
+  Neo4j 5, Redis via apt; supervisor conf
+  (`/etc/supervisor/conf.d/governance_data_plane.conf`) picks them up
+  and keeps them alive.
+
+**Verification (iteration 5)**: testing agent — 100% backend / 100%
+frontend. 36/36 python E2E (28 existing + 8 new Google Auth) + 52/52
+vitest all pass. Only lingering items are the 3 pre-existing low-priority
+console TypeErrors from stale render callbacks (carried over from
+iteration 4, non-blocking).
+
 ## 2026-02 iteration (part 3) — data-testid coverage + artifact detail modal + env recovery
 - **data-testid attributes** on every interactive element via a `tid()` helper
   in `mcp-server/ui/workbench.js` — login roles, sidebar nav, dashboard KPIs,
@@ -221,6 +285,11 @@ neo4j/governance_secret, started via `neo4j start`). After pod restart: `service
 start; redis-server --daemonize yes; neo4j start` then restart supervisor backend/frontend.
 
 ## Backlog / next
+- DONE (2026-02, part 4): security-fix test-suite refactor (env-sourced
+  CREDS from conftest.py) + Emergent-managed Google Sign-In flow
+  (workbench "Sign in with Google" button, backend
+  `/api/v1/auth/google/session|me|logout`, HttpOnly cookie + governance JWT,
+  Google-authenticated users → `governance-admin`).
 - DONE (2026-02, part 3): data-testid coverage across the SPA + artifact
   detail modal wired to `GET /api/v1/artifacts/{id}` + null-guards on stale
   async render callbacks + supervisor adoption of Postgres/Neo4j/Redis so
