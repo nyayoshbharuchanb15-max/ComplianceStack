@@ -110,9 +110,11 @@ def validate_schema_shape(credential: dict) -> tuple[bool, list[str]]:
 
 
 def verify_credential(credential: dict) -> dict[str, Any]:
+    from orchestrator.config import trusted_issuer_dids
     schema_ok, problems = validate_schema_shape(credential)
     signature_ok = verify_with_method(
-        credential, (credential.get("proof") or {}).get("verificationMethod", ""))
+        credential, (credential.get("proof") or {}).get("verificationMethod", ""),
+        trusted_dids=trusted_issuer_dids())
     not_expired = True
     valid_until = credential.get("validUntil")
     if valid_until:

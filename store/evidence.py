@@ -226,6 +226,18 @@ async def revoke_certificate(certificate_id: str, reason: str) -> bool:
     return result.endswith("1")
 
 
+async def unrevoke_certificate(certificate_id: str) -> bool:
+    """Roll back a revocation when a downstream mirror (e.g. Neo4j) fails.
+    Restores the cert to `active`. Only used inside the revoke handler."""
+    async with db.pool.acquire() as conn:
+        result = await conn.execute(
+            """UPDATE governance_certificates
+               SET status='active', revoked_at=NULL, revocation_reason=NULL
+               WHERE certificate_id=$1 AND status='revoked'""",
+            certificate_id)
+    return result.endswith("1")
+
+
 # ─── Event ledger (internal webhook delivery) ────────────────────
 
 async def record_event(event_id: str, stream: str, event_type: str, payload: dict,

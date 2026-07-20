@@ -43,7 +43,6 @@ const h = (tag, attrs = {}, ...children) => {
   const el = document.createElement(tag);
   for (const [k, v] of Object.entries(attrs || {})) {
     if (k === "class") el.className = v;
-    else if (k === "html") el.innerHTML = v;
     else if (k.startsWith("on") && typeof v === "function") el.addEventListener(k.slice(2), v);
     else if (v === false || v == null) continue;
     else if (k === "checked" && typeof v === "boolean") el.checked = v;
@@ -406,11 +405,13 @@ const DEMO_PHASE_INPUTS = {
 };
 
 // ─── Roles ──────────────────────────────────────────────────────
+// NOTE: no client secrets are shipped in the browser. Role cards prefill the
+// clientId; the operator must supply the secret from their password vault.
 const ROLES = [
-  { clientId: "governance-admin", secret: "govern-admin-secret-dev", name: "Governance Admin", desc: "Full pipeline access — intake through certification, monitoring, reaudit.", scopesLbl: "all scopes" },
-  { clientId: "intake-officer", secret: "intake-officer-secret-dev", name: "Intake Officer", desc: "Register models and scope regulatory framework mapping.", scopesLbl: "phase:intake · phase:scope · runs:read" },
-  { clientId: "audit-engineer", secret: "audit-engineer-secret-dev", name: "Audit Engineer", desc: "Execute the risk, privacy, fairness, robustness and explainability engines.", scopesLbl: "phase:risk|privacy|fairness|robustness|explainability · runs:read" },
-  { clientId: "certification-officer", secret: "certification-officer-secret-dev", name: "Certification Officer", desc: "Assemble VC 2.0 certificates, configure monitoring, trigger reaudits.", scopesLbl: "phase:certify · phase:monitor · reaudit:trigger · runs:read · certs:read" },
+  { clientId: "governance-admin", name: "Governance Admin", desc: "Full pipeline access — intake through certification, monitoring, reaudit, revoke.", scopesLbl: "all scopes" },
+  { clientId: "intake-officer", name: "Intake Officer", desc: "Register models and scope regulatory framework mapping.", scopesLbl: "phase:intake · phase:scope · runs:read" },
+  { clientId: "audit-engineer", name: "Audit Engineer", desc: "Execute the risk, privacy, fairness, robustness and explainability engines.", scopesLbl: "phase:risk|privacy|fairness|robustness|explainability · runs:read" },
+  { clientId: "certification-officer", name: "Certification Officer", desc: "Assemble VC 2.0 certificates, configure monitoring, trigger reaudits, revoke.", scopesLbl: "phase:certify · phase:monitor · reaudit:trigger · runs:read · certs:read · certs:revoke" },
 ];
 
 // ─── Router ─────────────────────────────────────────────────────
@@ -511,6 +512,7 @@ route("login", async (app) => {
   const err = h("div", { class: "err", ...tid("login-error") });
   async function auth(clientId, secret) {
     err.textContent = "";
+    if (!secret) { err.textContent = "Client secret required"; return; }
     try {
       const t = await api("/api/v1/auth/token", { method: "POST", public: true, body: { clientId, clientSecret: secret } });
       setSession({ ...t, clientId });
@@ -518,21 +520,22 @@ route("login", async (app) => {
       location.hash = "#/dashboard";
     } catch (e) { err.textContent = e.message; }
   }
-  const custom = { id: h("input", { placeholder: "clientId", value: "governance-admin", ...tid("login-client-id-input") }), sec: h("input", { placeholder: "clientSecret", type: "password", ...tid("login-client-secret-input") }) };
+  const custom = { id: h("input", { placeholder: "clientId", ...tid("login-client-id-input") }), sec: h("input", { placeholder: "clientSecret", type: "password", ...tid("login-client-secret-input") }) };
   app.appendChild(h("div", { class: "login-wrap", ...tid("login-page") },
     h("div", { class: "login-card" },
       h("div", { class: "brand-mark" }, "◉"),
       h("h1", null, "Auditor Workbench"),
       h("div", { class: "sub" },
         "On-premise AI compliance orchestration. Sign in with a service account — a human auditor drives the workbench, or an AI agent drives the identical pipeline via the MCP endpoint. ",
-        "All 9 phases produce article-level evidence citations.",
+        h("b", null, "Client secrets are held in your password vault"), " and are never shipped in the browser.",
       ),
-      ...ROLES.map(r => h("button", { class: "role-btn", ...tid(testidFor("login-role", r.clientId)), onclick: () => auth(r.clientId, r.secret) },
+      ...ROLES.map(r => h("button", { class: "role-btn", ...tid(testidFor("login-role", r.clientId)),
+        onclick: () => { custom.id.value = r.clientId; custom.sec.focus(); toast(`Prefilled clientId '${r.clientId}' — paste the secret from your vault`, "info", 3500); } },
         h("div", { class: "role-name" }, r.name),
         h("div", { class: "role-desc" }, r.desc),
         h("div", { class: "role-scopes" }, r.scopesLbl),
       )),
-      h("div", { class: "divider" }, h("span", null, "Or bring your own")),
+      h("div", { class: "divider" }, h("span", null, "Sign in")),
       h("div", { class: "custom-cred" },
         custom.id, custom.sec,
         h("button", { class: "btn primary", ...tid("login-custom-signin-btn"), onclick: () => auth(custom.id.value, custom.sec.value) }, "Sign in"),
@@ -784,7 +787,7 @@ route("events", async (app) => {
 // ─── MCP / API reference ────────────────────────────────────────
 route("mcp", async (app) => {
   const cmds = [
-    { t: "Get a JWT (client credentials)", c: `curl -X POST /api/v1/auth/token -H 'Content-Type: application/json' \\\n  -d '{"clientId":"governance-admin","clientSecret":"govern-admin-secret-dev"}'` },
+    { t: "Get a JWT (client credentials)", c: `curl -X POST /api/v1/auth/token -H 'Content-Type: application/json' \\\n  -d '{"clientId":"governance-admin","clientSecret":"$GOV_ADMIN_SECRET"}'` },
     { t: "List runs", c: `curl /api/v1/runs -H "Authorization: Bearer $TOKEN"` },
     { t: "Get run detail (with citations)", c: `curl /api/v1/runs/<runId> -H "Authorization: Bearer $TOKEN"` },
     { t: "List artifacts for a run", c: `curl /api/v1/runs/<runId>/artifacts -H "Authorization: Bearer $TOKEN"` },

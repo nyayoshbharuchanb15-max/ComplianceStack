@@ -521,13 +521,22 @@ class RevokeRequest(BaseModel):
 
 @router.post("/certificates/{certificate_id}/revoke")
 async def revoke_certificate(certificate_id: str, req: RevokeRequest,
-                             claims: dict = Depends(require_scope("certs:read"))):
+                             claims: dict = Depends(require_scope("certs:revoke"))):
     ok = await store.revoke_certificate(certificate_id, req.reason)
     if not ok:
         raise HTTPException(status_code=404, detail={
             "code": "CERT_NOT_REVOCABLE",
             "message": "Certificate not found or already revoked"})
-    await lineage.set_certificate_status(certificate_id, "revoked")
+    # Mirror the status in Neo4j lineage; if the mirror fails, roll back the
+    # Postgres write so the two stores never disagree.
+    try:
+        await lineage.set_certificate_status(certificate_id, "revoked")
+    except Exception:
+        await store.unrevoke_certificate(certificate_id)
+        raise HTTPException(status_code=503, detail={
+            "code": "LINEAGE_UNAVAILABLE",
+            "message": "Failed to mirror revocation to lineage graph; "
+                       "revocation rolled back. Please retry."})
     return {"certificateId": certificate_id, "status": "revoked", "reason": req.reason}
 
 

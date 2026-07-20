@@ -131,9 +131,10 @@ export async function buildStatusPage(sessionCount: number, version: string): Pr
 
 <h2>Try It</h2>
 <pre># 1. Get a token (governance-admin service account)
+#    Client secrets are supplied via GOV_*_SECRET env vars — never printed here.
 curl -s -X POST ${esc(GOVERNANCE_API_URL === "http://localhost:8001" ? "" : GOVERNANCE_API_URL)}/api/v1/auth/token \\
   -H 'Content-Type: application/json' \\
-  -d '{"clientId":"governance-admin","clientSecret":"govern-admin-secret-dev"}'
+  -d '{"clientId":"governance-admin","clientSecret":"$GOV_ADMIN_SECRET"}'
 
 # 2. Run Phase 1 (Intake) — then scope, risk, … certification, monitoring
 curl -s -X POST /api/v1/phases/intake -H "Authorization: Bearer $TOKEN" \\

@@ -1007,6 +1007,30 @@ async function main() {
         const sessionManager = new StreamableHTTPSessionManager();
         sessionManager.startCleanup();
 
+        // Security headers on every response.
+        // CSP: no inline JS (SPA is served from same-origin /assets/workbench.js);
+        // style-src allows the same-origin sheet only. No object/embed. No framing.
+        app.use((_req, res, next) => {
+          res.setHeader(
+            "Content-Security-Policy",
+            "default-src 'self'; " +
+              "script-src 'self'; " +
+              "style-src 'self' 'unsafe-inline'; " +   // inline styles are used by the SPA for dynamic pill colours
+              "img-src 'self' data:; " +
+              "font-src 'self' data:; " +
+              "connect-src 'self'; " +
+              "object-src 'none'; " +
+              "base-uri 'self'; " +
+              "frame-ancestors 'none'; " +
+              "form-action 'self'"
+          );
+          res.setHeader("X-Content-Type-Options", "nosniff");
+          res.setHeader("Referrer-Policy", "no-referrer");
+          res.setHeader("X-Frame-Options", "DENY");
+          res.setHeader("Permissions-Policy", "geolocation=(), microphone=(), camera=()");
+          next();
+        });
+
         app.get("/", async (_req, res) => {
           const { renderWorkbenchShell } = await import("./workbench.js");
           res.type("html").send(renderWorkbenchShell(SERVER_VERSION));

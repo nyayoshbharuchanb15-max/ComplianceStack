@@ -5,12 +5,28 @@ Token endpoint: POST {BASE}/api/v1/auth/token  body: {"clientId": "...", "client
 Preview BASE: http://localhost:8001 (external: https://1567e779-1049-4657-9026-42f6c3b7ffe1.preview.emergentagent.com)
 Docker compose BASE: http://localhost:8010
 
-| clientId | clientSecret | role | scopes |
+Client secrets are held in `/app/backend/.env` and supplied via env vars. They
+are NEVER shipped in the workbench, printed by the status page, or committed
+to this file. For local automation the fixtures below read them at runtime:
+
+| clientId | env var holding the secret | role | scopes |
 |---|---|---|---|
-| governance-admin | govern-admin-secret-dev | governance-admin | all |
-| intake-officer | intake-officer-secret-dev | intake-officer | phase:intake, phase:scope, runs:read |
-| audit-engineer | audit-engineer-secret-dev | audit-engineer | phase:risk/privacy/fairness/robustness/explainability, runs:read |
-| certification-officer | certification-officer-secret-dev | certification-officer | phase:certify, phase:monitor, reaudit:trigger, runs:read, certs:read |
+| governance-admin | `GOV_ADMIN_SECRET` | governance-admin | all incl. certs:revoke |
+| intake-officer | `GOV_INTAKE_SECRET` | intake-officer | phase:intake, phase:scope, runs:read |
+| audit-engineer | `GOV_AUDIT_SECRET` | audit-engineer | phase:risk/privacy/fairness/robustness/explainability, runs:read |
+| certification-officer | `GOV_CERT_SECRET` | certification-officer | phase:certify, phase:monitor, reaudit:trigger, runs:read, certs:read, certs:revoke |
+
+To read the current preview secret for a test run:
+
+    export GOV_ADMIN_SECRET=$(grep '^GOV_ADMIN_SECRET' /app/backend/.env | cut -d'"' -f2)
+
+The startup validator refuses to boot if any secret is unset, matches a
+known-weak default (e.g. `govern-admin-secret-dev`), or is shorter than 24
+characters.
+
+Rotation guidance: generate a fresh secret with
+`python3 -c "import secrets; print(secrets.token_urlsafe(32))"` and update
+`/app/backend/.env`, then `sudo supervisorctl restart backend`.
 
 Use header: Authorization: Bearer <accessToken>
 

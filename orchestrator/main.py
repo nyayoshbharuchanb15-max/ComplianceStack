@@ -10,11 +10,16 @@ from fastapi import FastAPI
 from certs.signer import get_signer
 from events.fabric import PHASE_EVENTS_STREAM, REAUDIT_STREAM, fabric
 from graph.client import graph
+from orchestrator.config import validate_startup_config
 from store import evidence as store_evidence
 from store.db import db
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger("orchestrator.main")
+
+# Fail-fast validation: refuse to import (and therefore to boot) with weak or
+# missing service-account / JWT secrets. Raises InsecureConfigError.
+validate_startup_config()
 
 
 async def _deliver_phase_event(envelope: dict) -> None:

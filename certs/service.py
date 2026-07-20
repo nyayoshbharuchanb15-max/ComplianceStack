@@ -40,4 +40,7 @@ async def sign(req: SignRequest):
 @app.post("/verify")
 async def verify(req: VerifyRequest):
     method = (req.credential.get("proof") or {}).get("verificationMethod", "")
-    return {"verified": verify_with_method(req.credential, method)}
+    signer = get_signer()
+    # Signer service verifies only credentials it issued (self-DID).
+    return {"verified": verify_with_method(req.credential, method,
+                                           trusted_dids=[signer.did])}

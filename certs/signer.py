@@ -112,13 +112,28 @@ class Ed25519Signer:
         proof = document.get("proof")
         if not proof or proof.get("cryptosuite") != "eddsa-jcs-2022":
             return False
-        return verify_with_method(document, proof.get("verificationMethod", ""))
+        # This is the LOCAL signer verifying its own credential — pin to self.
+        return verify_with_method(
+            document, proof.get("verificationMethod", ""), trusted_dids=[self.did])
 
 
-def verify_with_method(document: dict, verification_method: str) -> bool:
-    """Independent verification from the credential + did:key alone (no key store)."""
+def verify_with_method(document: dict, verification_method: str,
+                       trusted_dids: Optional[list[str]] = None) -> bool:
+    """Verify a VC 2.0 credential's DataIntegrityProof.
+
+    Trust model: only accept `verificationMethod`s whose base did:key appears
+    in the ``trusted_dids`` allow-list (defaults to the local signer's DID).
+    Without this pin, ANY holder of an Ed25519 key can forge a syntactically
+    valid credential — cf. SEC-002 in the 2026-02 security audit.
+    """
     proof = document.get("proof") or {}
     try:
+        base_did = verification_method.split("#")[0]
+        allowed = list(trusted_dids or [])
+        # Always trust the locally-embedded signer.
+        allowed.append(get_signer().did)
+        if base_did not in allowed:
+            return False
         multibase = verification_method.split("#")[-1]
         if not multibase.startswith("z"):
             return False
