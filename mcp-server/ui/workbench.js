@@ -160,7 +160,7 @@ async function router() {
   const app = document.getElementById("app");
   app.innerHTML = "";
 
-  if (!S.token && hash !== "login" && !hash.startsWith("verify-cert")) {
+  if (!S.token && hash !== "login" && !hash.startsWith("verify")) {
     location.hash = "#/login"; return;
   }
 
@@ -229,7 +229,11 @@ function renderShell(body) {
         h("div", { class: "u-role" }, S.role || "unknown"),
         h("div", { class: "u-name" }, "@" + (S.clientId || "?")),
         h("a", { class: "u-logout", onclick: () => { clearSession(); location.hash = "#/login"; } }, "Sign out"),
-      ) : null,
+      ) : h("div", { class: "identity" },
+        h("div", { class: "u-role" }, "guest"),
+        h("div", { class: "u-name" }, "read-only mode"),
+        h("a", { class: "u-logout", style: "color: var(--acc)", onclick: () => { location.hash = "#/login"; } }, "Sign in →"),
+      ),
     ),
     body,
   );

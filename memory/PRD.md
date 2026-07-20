@@ -60,6 +60,52 @@ Reaudit impact matrix in AUDIT_PIPELINE.md §11; updatedPhaseInputs carries trig
 - Known pre-existing quirk (NOT introduced here): custom streamable-http transport
   terminates session on connection close (index.ts res.on("close")) — stdio is canonical.
 
+## 2026-02 iteration — Auditor Workbench UI + evidence-artifact citations
+User asked "can I have a user-friendly tool for auditing?" with an explicit follow-up:
+every phase must show WHICH documents/artifacts were inspected against WHICH regulatory
+article, the intake form/API must accept a set of documents/evidence per audit run, and the
+same flow must be drivable by both a human auditor AND an AI agent via MCP.
+
+Delivered:
+- `store/migrations/003_artifacts.sql` — governance_artifacts + governance_phase_citations.
+- `store/artifacts.py` — insert/list/get_by_type + insert/list citations.
+- `orchestrator/citations.py` — PHASE_EXPECTATIONS matrix (25 artifact-type ↔ article ↔
+  control mappings across 8 phases with framework, article, control, and a deterministic
+  verdict mapper: present | pass | warning | fail | missing).
+- `orchestrator/pipeline.py` — _persist_phase now calls build_phase_citations, embeds
+  `citedArtifacts`, `missingArtifacts`, `articleCitations` in every phase's outputs
+  BEFORE integrity_hash is computed (evidence carries the citation chain).
+- `orchestrator/routes.py` — IntakeRequest gains `evidenceArtifacts[]`; new endpoints:
+  GET /runs (list, filter by modelId/status), GET /runs/{id} (now returns artifacts+citations
+  arrays), POST /runs/{id}/artifacts (append), GET /runs/{id}/artifacts, GET /certificates
+  (list), POST /certificates/{id}/revoke.
+- `mcp-server/src/governance-tools.ts` — intake_register MCP tool schema now accepts
+  `evidenceArtifacts[]` so AI agents produce identical evidence chains.
+- `mcp-server/src/index.ts` — validateOrigin scoped to /mcp routes only; new routes:
+  GET / (SPA shell), /assets/workbench.js, /assets/workbench.css, /status (old page kept).
+- `mcp-server/src/workbench.ts` + `mcp-server/ui/workbench.js` + `.css` — full auditor
+  workbench SPA (~1100 lines vanilla JS + ~300 lines CSS, no CDN, no build step):
+  - #/login: 4 role cards (governance-admin, intake-officer, audit-engineer,
+    certification-officer) + custom clientId/secret. Guest mode allowed for #/verify.
+  - #/dashboard: 4 infra cards + recent runs + recent certs.
+  - #/audit/new: 9-step wizard with role-based per-phase forms, inline artifact editor
+    (18 default demo artifacts covering every PHASE_EXPECTATIONS entry), and a
+    "Run full demo audit" button that chains phases 1-9 in one click.
+  - #/runs, #/runs/:id: run detail with 4 KPIs (phases/artifacts/citations/missing),
+    9-phase timeline (hash chain + article citations + engine outputs + blockers +
+    "Missing evidence — controls not covered"), and an evidence artifact table.
+  - #/certificates, #/certificates/:id: VC 2.0 viewer with verification checks + revoke.
+  - #/verify (public, guest ok): paste URN → Ed25519 verify.
+  - #/events: recent + dead-letter tables.
+  - #/reaudit: trigger impact-scoped reaudit.
+  - #/mcp: curl examples + 11 governance MCP tools list.
+- tests/governance/test_artifacts_and_citations.py — 6 new E2E tests all passing.
+
+Verification: 16/16 python E2E tests pass, 49/49 typescript tests pass, testing agent
+signed off with 100% backend / ~95% frontend (only fix required was allowing #/verify as
+a guest route — fixed). Preview URL:
+https://1567e779-1049-4657-9026-42f6c3b7ffe1.preview.emergentagent.com
+
 ## Local infra (preview pod)
 PostgreSQL (apt, user governance/governance_secret, db evidence_store, sql/init.sql +
 governance migration applied at startup), Redis (daemonized :6379), Neo4j 5 (apt,
@@ -70,7 +116,12 @@ start; redis-server --daemonize yes; neo4j start` then restart supervisor backen
 - DONE (2026-06): GET / on the MCP server (port 3000) serves a live status console
   (mcp-server/src/status-page.ts) — orchestrator/Postgres/Neo4j/Redis/signer health,
   9-phase table, recent evidence events, curl quickstart.
+- DONE (2026-02): GET /api/v1/runs?modelId= listing endpoint (workbench dashboard).
+- DONE (2026-02): Auditor Workbench SPA at / with 9-phase interactive wizard, article-
+  level artifact citations, cert viewer/verifier, event ledger, reaudit trigger.
 - P1: fix pre-existing streamable-http session lifecycle in mcp-server transport
-- P1: GET /api/v1/runs?modelId= listing endpoint
+- P2: CI workflow that spins up the full compose stack + runs governance E2E on every push
 - P2: NATS option for the event fabric; RFC 3161 timestamp anchoring for governance certs
-- P2: publish deployment guide (DEPLOYMENT.md) + CI job running tests/governance against compose
+- P2: publish deployment guide (DEPLOYMENT.md)
+- P2: rich artifact ingest — inline PDF/CSV/JSON upload via multipart with server-side sha256
+  (currently URIs + optional 4 KB snippet); PDF text extraction for automatic phase gap-scan

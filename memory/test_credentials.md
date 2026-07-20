@@ -16,10 +16,14 @@ Use header: Authorization: Bearer <accessToken>
 
 ## Endpoints
 - Phases: POST /api/v1/phases/{intake|scope|risk|data-protection|fairness|robustness|explainability|certification|monitoring}
-- Reaudit: POST /api/v1/reaudit ; Runs: GET /api/v1/runs/{runId} (+/lineage)
+- Reaudit: POST /api/v1/reaudit ; Runs: GET /api/v1/runs, GET /api/v1/runs/{runId} (+/lineage +/artifacts)
+- Artifacts: POST /api/v1/runs/{runId}/artifacts, GET /api/v1/runs/{runId}/artifacts
+- Certs: GET /api/v1/certificates (list), GET /api/v1/certificates/{id}, POST /api/v1/certificates/{id}/revoke
 - Certs (public): GET /api/v1/certificates/{id}/verify, /status
 - Events: GET /api/v1/events/recent, /api/v1/events/dead-letter, POST /api/v1/events/test-dead-letter
 - Health: GET /health, GET /api/v1/health
+- Auditor Workbench SPA (port 3000): GET / (login → wizard/dashboard/runs/certs/events/reaudit),
+  /assets/workbench.js, /assets/workbench.css. Guest mode allowed on #/verify only.
 
 ## Infra (preview pod)
 - PostgreSQL: governance / governance_secret, db evidence_store, localhost:5432
