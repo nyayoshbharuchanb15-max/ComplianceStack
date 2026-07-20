@@ -60,6 +60,44 @@ Reaudit impact matrix in AUDIT_PIPELINE.md §11; updatedPhaseInputs carries trig
 - Known pre-existing quirk (NOT introduced here): custom streamable-http transport
   terminates session on connection close (index.ts res.on("close")) — stdio is canonical.
 
+## 2026-02 iteration (part 3) — data-testid coverage + artifact detail modal + env recovery
+- **data-testid attributes** on every interactive element via a `tid()` helper
+  in `mcp-server/ui/workbench.js` — login roles, sidebar nav, dashboard KPIs,
+  wizard steps + run-demo/back/next/per-phase-run buttons, artifact editor
+  (name/type/uri/file/add/remove), run detail page + KPIs + timeline heads
+  + timeline gap/citation rows, artifact table rows, cert detail + revoke,
+  verify page + checks + VC JSON, events page + tables + inject-DLQ button,
+  reaudit form, modal + close button, toast container. Every page also has
+  a page-level test id (`login-page`, `dashboard-page`, `audit-wizard-page`,
+  `run-detail-page`, etc.). Interactive rows carry `data-run-id` /
+  `data-cert-id` / `data-artifact-id` attributes for stable lookup.
+- **Artifact detail modal** — new `openModal()` and `openArtifactDetail()` in
+  `workbench.js`. Clicking any row in the Evidence Artifacts table on the
+  run detail page (or any gap/citation row inside an expanded phase) opens a
+  modal that fetches `GET /api/v1/artifacts/{artifactId}` and shows: name +
+  artifactId + type + mimeType, extraction-status pill, gap-score %, blocker
+  and warning gap counts, list of cited phases (tags), full per-section gap
+  findings with regulatory framework + article + section + first-matching
+  excerpt from the document + verdict pill, and the full extracted document
+  text (up to ~300 KB, wrapped preformatted). Escape closes the modal;
+  click-outside closes.
+- **CSS** — `.cit-row.clickable` hover style (subtle border+background
+  emerald tint) added so users see the rows are clickable.
+- **Stale-render null-guards** — three async `document.getElementById(...)`
+  callers on dashboard/runs/certs/events pages were guarded so that
+  navigating away before the fetch resolves no longer throws
+  `TypeError: Cannot read properties of null` in the console.
+- **Data-plane recovery** — Postgres/Neo4j/Redis were reinstalled after a
+  pod restart and adopted under supervisor as `governance-postgres`,
+  `governance-neo4j`, `governance-redis` via
+  `/etc/supervisor/conf.d/governance_data_plane.conf`. Data plane now
+  survives pod restarts. `neo4j` data dir chown'd to the `neo4j` user.
+
+**Verification (iteration 4)**: testing agent — 100 % backend / 100 %
+frontend. 28/28 python E2E + 52/52 vitest. Zero critical or minor issues;
+the three low-priority console `TypeError` reports have now been fixed
+with null-guards on the async render callbacks.
+
 ## 2026-02 iteration (part 2) — P1 bug fix + rich artifact ingest + document gap analysis
 The user marked P1 (MCP streamable-http session-close lifecycle) as a real bug and
 explicitly asked for the diagnostic core: "article-level, document-level diagnosis
@@ -183,23 +221,24 @@ neo4j/governance_secret, started via `neo4j start`). After pod restart: `service
 start; redis-server --daemonize yes; neo4j start` then restart supervisor backend/frontend.
 
 ## Backlog / next
-- DONE (2026-02, part 2): fix pre-existing streamable-http session lifecycle
-  in mcp-server transport (P1 bug) — sessions now survive across the initial
-  POST close; only terminated on DELETE or idle-timeout. Regression tests
-  added at mcp-server/src/__tests__/session-lifecycle.test.ts.
-- DONE (2026-02, part 2): rich artifact ingest — multipart PDF/CSV/JSON/MD/TXT
-  upload, server-side sha256, pypdf text extraction, deterministic per-type
-  gap analysis producing article-level "which section of which document
-  proved (or failed to prove) compliance" diagnostics that surface as phase
-  blockers when severity=blocker.
-- DONE (2026-02, part 2): DEPLOYMENT.md — compose + bare-metal, env vars,
-  migrations, backup/restore, security hardening.
+- DONE (2026-02, part 3): data-testid coverage across the SPA + artifact
+  detail modal wired to `GET /api/v1/artifacts/{id}` + null-guards on stale
+  async render callbacks + supervisor adoption of Postgres/Neo4j/Redis so
+  the data plane survives pod restarts.
+- DONE (2026-02, part 2): P1 bug fix (MCP session lifecycle) + rich artifact
+  ingest (multipart PDF/CSV/JSON/MD/TXT, server-side sha256, pypdf) +
+  deterministic gap analysis producing article-level "which section of which
+  document evidences (or fails to evidence) which sub-article" diagnostics +
+  DEPLOYMENT.md.
 - DONE (2026-02): Auditor Workbench SPA + article-level artifact citations.
 - Backlog (deferred by user until legal-grade production push): CI workflow
   running compose stack + governance E2E on every push; NATS option for the
   event fabric; RFC 3161 timestamp anchoring for VC 2.0 certificates.
 - Backlog (future enhancement to gap analysis): plug in an on-prem LLM-free
   NER pass for artifact types that don't lend themselves to regex (e.g.
-  extracting explicit retention days, DPO email, dataset row counts). The
-  spec matrix already supports adding structured extractors alongside the
-  regex checks.
+  extracting explicit retention days, DPO email, dataset row counts).
+- Backlog (workbench polish): per-organisation override file
+  (`/app/config/gap_overrides.yml`) so compliance teams can tune the
+  SPECIFICATIONS matrix without a code change — add company-specific
+  required sections, tighten severities, layer regional overlays (DPDP,
+  CCPA) on top of GDPR.

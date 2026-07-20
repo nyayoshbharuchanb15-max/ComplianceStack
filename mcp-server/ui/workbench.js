@@ -567,20 +567,28 @@ route("dashboard", async (app) => {
   ]);
 
   const svc = health?.services || { postgres: "?", neo4j: "?", redis: "?", certSigner: "?" };
-  document.getElementById("dash-metrics").replaceWith(h("div", { class: "grid cols-4", ...tid("dashboard-metrics") },
+  const metricsHost = document.getElementById("dash-metrics");
+  if (!metricsHost) return;  // user navigated away before the fetch resolved
+  metricsHost.replaceWith(h("div", { class: "grid cols-4", ...tid("dashboard-metrics") },
     h("div", { class: "card", ...tid("dashboard-metric-overall") }, h("h3", null, "Overall"), h("div", { class: "metric" }, health?.status === "ok" ? h("span", { class: "pill ok" }, "Operational") : h("span", { class: "pill warn" }, health?.status || "?")), h("div", { class: "metric-sub" }, "System-wide readiness")),
     h("div", { class: "card", ...tid("dashboard-metric-postgres") }, h("h3", null, "PostgreSQL"), h("div", { class: "metric" }, h("span", { class: "pill " + svc.postgres }, svc.postgres)), h("div", { class: "metric-sub" }, "Evidence store")),
     h("div", { class: "card", ...tid("dashboard-metric-neo4j") }, h("h3", null, "Neo4j Graph"), h("div", { class: "metric" }, h("span", { class: "pill " + svc.neo4j }, svc.neo4j)), h("div", { class: "metric-sub" }, "Lineage graph")),
     h("div", { class: "card", ...tid("dashboard-metric-redis") }, h("h3", null, "Redis Fabric"), h("div", { class: "metric" }, h("span", { class: "pill " + svc.redis }, svc.redis)), h("div", { class: "metric-sub" }, "Event streams")),
   ));
 
-  const runsEl = document.getElementById("dash-runs").querySelector(".section-body");
-  runsEl.innerHTML = "";
-  runsEl.appendChild(runs.runs?.length ? renderRunsTable(runs.runs.slice(0, 10)) : h("div", { class: "empty" }, "No audit runs yet. Start with New Audit."));
+  const runsSection = document.getElementById("dash-runs");
+  if (runsSection) {
+    const runsEl = runsSection.querySelector(".section-body");
+    runsEl.innerHTML = "";
+    runsEl.appendChild(runs.runs?.length ? renderRunsTable(runs.runs.slice(0, 10)) : h("div", { class: "empty" }, "No audit runs yet. Start with New Audit."));
+  }
 
-  const certsEl = document.getElementById("dash-certs").querySelector(".section-body");
-  certsEl.innerHTML = "";
-  certsEl.appendChild(certs.certificates?.length ? renderCertsTable(certs.certificates.slice(0, 10)) : h("div", { class: "empty" }, "No certificates issued yet."));
+  const certsSection = document.getElementById("dash-certs");
+  if (certsSection) {
+    const certsEl = certsSection.querySelector(".section-body");
+    certsEl.innerHTML = "";
+    certsEl.appendChild(certs.certificates?.length ? renderCertsTable(certs.certificates.slice(0, 10)) : h("div", { class: "empty" }, "No certificates issued yet."));
+  }
 });
 
 function renderRunsTable(rows) {
@@ -635,7 +643,9 @@ route("runs", async (app) => {
   );
   app.appendChild(renderShell(body));
   const data = await api("/api/v1/runs?limit=100");
-  const el = document.getElementById("runs-tbl").querySelector(".section-body");
+  const host = document.getElementById("runs-tbl");
+  if (!host) return;
+  const el = host.querySelector(".section-body");
   el.innerHTML = "";
   el.appendChild(data.runs.length ? renderRunsTable(data.runs) : h("div", { class: "empty" }, "No runs yet."));
 });
@@ -651,12 +661,17 @@ route("certificates", async (app) => {
   );
   app.appendChild(renderShell(body));
   if (!hasScope("certs:read")) {
-    document.getElementById("certs-tbl").querySelector(".section-body").innerHTML = "";
-    document.getElementById("certs-tbl").querySelector(".section-body").appendChild(h("div", { class: "empty" }, "Your role does not have certs:read scope. Sign in as Certification Officer or Governance Admin."));
+    const host = document.getElementById("certs-tbl");
+    if (!host) return;
+    const el = host.querySelector(".section-body");
+    el.innerHTML = "";
+    el.appendChild(h("div", { class: "empty" }, "Your role does not have certs:read scope. Sign in as Certification Officer or Governance Admin."));
     return;
   }
   const data = await api("/api/v1/certificates?limit=100");
-  const el = document.getElementById("certs-tbl").querySelector(".section-body");
+  const host = document.getElementById("certs-tbl");
+  if (!host) return;
+  const el = host.querySelector(".section-body");
   el.innerHTML = "";
   el.appendChild(data.certificates.length ? renderCertsTable(data.certificates) : h("div", { class: "empty" }, "No certificates yet."));
 });
@@ -759,8 +774,11 @@ route("events", async (app) => {
       ))),
     );
   }
-  const r1 = document.getElementById("ev-recent").querySelector(".section-body"); r1.innerHTML = ""; r1.appendChild(evTable(rec.events || [], "recent"));
-  const r2 = document.getElementById("ev-dlq").querySelector(".section-body"); r2.innerHTML = ""; r2.appendChild(evTable(dlq.ledger || [], "dlq"));
+  const r1Host = document.getElementById("ev-recent");
+  const r2Host = document.getElementById("ev-dlq");
+  if (!r1Host || !r2Host) return;
+  const r1 = r1Host.querySelector(".section-body"); r1.innerHTML = ""; r1.appendChild(evTable(rec.events || [], "recent"));
+  const r2 = r2Host.querySelector(".section-body"); r2.innerHTML = ""; r2.appendChild(evTable(dlq.ledger || [], "dlq"));
 });
 
 // ─── MCP / API reference ────────────────────────────────────────
