@@ -12,6 +12,8 @@ import uuid
 import httpx
 import pytest
 
+from tests.governance.conftest import CREDS
+
 BASE = os.environ.get("GOVERNANCE_API_URL", "http://localhost:8001").rstrip("/")
 
 COMPLIANT_DATASET = (
@@ -40,7 +42,7 @@ def get_token(client_id: str, secret: str) -> str:
 
 @pytest.fixture(scope="module")
 def admin() -> httpx.Client:
-    token = get_token("governance-admin", os.environ.get("GOV_ADMIN_SECRET", "govern-admin-secret-dev"))
+    token = get_token("governance-admin", CREDS["governance-admin"])
     with httpx.Client(base_url=BASE, headers={"Authorization": f"Bearer {token}"},
                       timeout=60) as client:
         yield client
@@ -48,7 +50,7 @@ def admin() -> httpx.Client:
 
 @pytest.fixture(scope="module")
 def intake_officer() -> httpx.Client:
-    token = get_token("intake-officer", os.environ.get("GOV_INTAKE_SECRET", "intake-officer-secret-dev"))
+    token = get_token("intake-officer", CREDS["intake-officer"])
     with httpx.Client(base_url=BASE, headers={"Authorization": f"Bearer {token}"},
                       timeout=60) as client:
         yield client

@@ -3,7 +3,7 @@
 from __future__ import annotations
 from typing import Optional
 
-from fastapi import APIRouter, Depends, File, Form, HTTPException, UploadFile
+from fastapi import APIRouter, Depends, File, Form, HTTPException, Request, Response, UploadFile
 from pydantic import BaseModel, Field
 
 from certs import issuer as vc_issuer
@@ -34,6 +34,27 @@ class TokenRequest(BaseModel):
 @router.post("/auth/token")
 async def token(req: TokenRequest):
     return issue_token(req.clientId, req.clientSecret)
+
+
+# ─── Google Sign-In (Emergent-managed OAuth) ─────────────────────
+from orchestrator.google_auth import (  # noqa: E402
+    exchange_google_session, get_me, logout,
+)
+
+
+@router.post("/auth/google/session")
+async def auth_google_session(request: Request, response: Response):
+    return await exchange_google_session(request, response)
+
+
+@router.get("/auth/me")
+async def auth_me(request: Request):
+    return await get_me(request)
+
+
+@router.post("/auth/logout")
+async def auth_logout(request: Request, response: Response):
+    return await logout(request, response)
 
 
 # ─── Phase request models (contracts: AUDIT_PIPELINE.md) ─────────

@@ -3,14 +3,9 @@ import os
 import requests
 import pytest
 
-BASE = os.environ.get("GOVERNANCE_API_URL", "https://1567e779-1049-4657-9026-42f6c3b7ffe1.preview.emergentagent.com").rstrip("/")
+from tests.governance.conftest import CREDS  # env-sourced service-account secrets
 
-CREDS = {
-    "governance-admin": "govern-admin-secret-dev",
-    "intake-officer": "intake-officer-secret-dev",
-    "audit-engineer": "audit-engineer-secret-dev",
-    "certification-officer": "certification-officer-secret-dev",
-}
+BASE = os.environ.get("GOVERNANCE_API_URL", "http://localhost:8001").rstrip("/")
 
 
 def token(client_id):

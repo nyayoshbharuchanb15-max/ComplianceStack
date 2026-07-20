@@ -16,6 +16,8 @@ from typing import Any
 import httpx
 import pytest
 
+from tests.governance.conftest import CREDS
+
 BASE = os.environ.get("GOVERNANCE_API_URL", "http://localhost:8001") + "/api/v1"
 
 
@@ -30,7 +32,7 @@ def _token(client: httpx.AsyncClient, cid: str, secret: str) -> str:
 def admin_token() -> str:
     r = httpx.post(f"{BASE}/auth/token",
                    json={"clientId": "governance-admin",
-                         "clientSecret": "govern-admin-secret-dev"})
+                         "clientSecret": CREDS["governance-admin"]})
     r.raise_for_status()
     return r.json()["accessToken"]
 

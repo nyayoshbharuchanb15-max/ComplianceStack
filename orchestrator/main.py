@@ -6,6 +6,7 @@ import os
 from contextlib import asynccontextmanager
 
 from fastapi import FastAPI
+from fastapi.middleware.cors import CORSMiddleware
 
 from certs.signer import get_signer
 from events.fabric import PHASE_EVENTS_STREAM, REAUDIT_STREAM, fabric
@@ -88,6 +89,30 @@ app = FastAPI(
     version="1.0.0",
     lifespan=lifespan,
 )
+
+# CORS: the Auditor Workbench SPA is served by mcp-server (port 3000 in preview);
+# it needs to send credentials (Google-session cookie) to the FastAPI orchestrator.
+_cors_env = os.environ.get("CORS_ORIGINS", "").strip()
+_cors_origins = [o.strip() for o in _cors_env.split(",") if o.strip()]
+if _cors_origins:
+    app.add_middleware(
+        CORSMiddleware,
+        allow_origins=_cors_origins,
+        allow_credentials=True,
+        allow_methods=["*"],
+        allow_headers=["*"],
+    )
+else:
+    # Reflect any origin so preview URL + docker-compose + localhost all work.
+    # Combined with allow_credentials=True this echoes the request origin
+    # (starlette does not permit literal "*" with credentials).
+    app.add_middleware(
+        CORSMiddleware,
+        allow_origin_regex=".*",
+        allow_credentials=True,
+        allow_methods=["*"],
+        allow_headers=["*"],
+    )
 
 from orchestrator.routes import router  # noqa: E402
 

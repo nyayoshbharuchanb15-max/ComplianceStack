@@ -51,3 +51,16 @@ Use header: Authorization: Bearer <accessToken>
   streamable-http on port 3000 (/health, /mcp)
 - E2E: GOVERNANCE_API_URL=http://localhost:8001 python -m pytest tests/governance -v
 - NOTE: uvicorn --reload only watches /app/backend — restart backend after orchestrator edits.
+
+## Google Sign-In (Emergent-managed OAuth)
+- **Frontend flow**: on `#/login` click `[data-testid="login-google-btn"]` → browser goes to `https://auth.emergentagent.com/?redirect=<origin>/` → after Google flow returns to `<origin>/#session_id=<id>` → SPA POSTs the id to `/api/v1/auth/google/session` → JWT returned + httpOnly cookie set.
+- **Backend endpoints**:
+  - `POST /api/v1/auth/google/session` — header `X-Session-ID: <id>` → 200 `{accessToken, role, scopes, clientId, user}` + `Set-Cookie: governance_session=...; HttpOnly; Secure; SameSite=None`
+  - `GET /api/v1/auth/me` — via cookie or `Authorization: Bearer <session_token>` → 200 `{userId, email, name, picture, role, scopes, expiresAt}`
+  - `POST /api/v1/auth/logout` — 204, deletes DB row + clears cookie
+- **Test fixture escape hatch** (preview only, guarded by `GOV_ALLOW_TEST_AUTH=1`):
+  - `GOOGLE_AUTH_TEST_SESSION_ID=test-fixture-session-id-abc123`
+  - `GOOGLE_AUTH_TEST_SESSION_TOKEN=test-fixture-session-token-xyz789`
+  - `GOOGLE_AUTH_TEST_EMAIL=test.user@governance.local`
+  - Users signing in with the fixture ID are minted role `governance-admin` (full scopes).
+- Role mapping: all Google-authenticated users → **governance-admin** (per user product decision).

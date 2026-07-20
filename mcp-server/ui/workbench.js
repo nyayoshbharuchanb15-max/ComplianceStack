@@ -27,6 +27,7 @@ async function api(path, opts = {}) {
     method: opts.method || "GET",
     headers,
     body: opts.body ? JSON.stringify(opts.body) : undefined,
+    credentials: "include",  // send httpOnly Google-session cookie
   });
   const text = await r.text();
   let data; try { data = text ? JSON.parse(text) : null; } catch { data = { raw: text }; }
@@ -446,7 +447,43 @@ async function router() {
   location.hash = "#/dashboard";
 }
 window.addEventListener("hashchange", router);
-window.addEventListener("load", router);
+window.addEventListener("load", async () => {
+  // REMINDER: DO NOT HARDCODE THE URL, OR ADD ANY FALLBACKS OR REDIRECT URLS,
+  // THIS BREAKS THE AUTH.
+  //
+  // Emergent Auth returns the user to `<redirect_url>#session_id=<id>`.
+  // Because our SPA uses hash routing, we redirect to `origin/` (no hash) so
+  // that on return `location.hash` is purely `#session_id=<id>` — no collision
+  // with `#/dashboard`. Exchange the session_id BEFORE the router runs.
+  const hash = location.hash || "";
+  const m = hash.match(/[#&]session_id=([^&]+)/);
+  if (m) {
+    const sessionId = decodeURIComponent(m[1]);
+    // Clean the URL immediately so a refresh doesn't re-exchange a used id.
+    history.replaceState(null, "", location.pathname + "#/dashboard");
+    try {
+      const t = await fetch("/api/v1/auth/google/session", {
+        method: "POST",
+        headers: { "Content-Type": "application/json", "X-Session-ID": sessionId },
+        credentials: "include",
+      });
+      if (!t.ok) throw new Error((await t.json()).detail?.message || t.statusText);
+      const data = await t.json();
+      setSession({
+        accessToken: data.accessToken,
+        role: data.role,
+        scopes: data.scopes,
+        clientId: data.clientId,
+      });
+      toast(`Signed in with Google as ${data.role}`, "success");
+    } catch (e) {
+      console.error("Google session exchange failed:", e);
+      toast("Google sign-in failed: " + e.message, "error");
+      location.hash = "#/login";
+    }
+  }
+  router();
+});
 
 function renderError(app, e) {
   app.innerHTML = "";
@@ -495,7 +532,12 @@ function renderShell(body) {
       S.token ? h("div", { class: "identity", ...tid("sidebar-identity-signed-in") },
         h("div", { class: "u-role", ...tid("sidebar-user-role") }, S.role || "unknown"),
         h("div", { class: "u-name", ...tid("sidebar-user-client-id") }, "@" + (S.clientId || "?")),
-        h("a", { class: "u-logout", ...tid("sidebar-signout-link"), onclick: () => { clearSession(); location.hash = "#/login"; } }, "Sign out"),
+        h("a", { class: "u-logout", ...tid("sidebar-signout-link"),
+          onclick: async () => {
+            // Fire-and-forget backend logout (clears Google session cookie if any).
+            try { await fetch("/api/v1/auth/logout", { method: "POST", credentials: "include" }); } catch {}
+            clearSession(); location.hash = "#/login";
+          } }, "Sign out"),
       ) : h("div", { class: "identity", ...tid("sidebar-identity-guest") },
         h("div", { class: "u-role" }, "guest"),
         h("div", { class: "u-name" }, "read-only mode"),
@@ -521,6 +563,17 @@ route("login", async (app) => {
     } catch (e) { err.textContent = e.message; }
   }
   const custom = { id: h("input", { placeholder: "clientId", ...tid("login-client-id-input") }), sec: h("input", { placeholder: "clientSecret", type: "password", ...tid("login-client-secret-input") }) };
+
+  // Emergent-managed Google Sign-In. On success the user is returned to
+  // `origin/#session_id=<id>` and the top-level `load` handler exchanges it.
+  // REMINDER: DO NOT HARDCODE THE URL, OR ADD ANY FALLBACKS OR REDIRECT URLS,
+  // THIS BREAKS THE AUTH.
+  const googleSignIn = () => {
+    const redirectUrl = window.location.origin + "/";
+    window.location.href =
+      "https://auth.emergentagent.com/?redirect=" + encodeURIComponent(redirectUrl);
+  };
+
   app.appendChild(h("div", { class: "login-wrap", ...tid("login-page") },
     h("div", { class: "login-card" },
       h("div", { class: "brand-mark" }, "◉"),
@@ -529,6 +582,11 @@ route("login", async (app) => {
         "On-premise AI compliance orchestration. Sign in with a service account — a human auditor drives the workbench, or an AI agent drives the identical pipeline via the MCP endpoint. ",
         h("b", null, "Client secrets are held in your password vault"), " and are never shipped in the browser.",
       ),
+      h("button", { class: "google-btn", ...tid("login-google-btn"), onclick: googleSignIn, type: "button" },
+        h("span", { class: "g-icon", "aria-hidden": "true" }, "G"),
+        h("span", null, "Sign in with Google"),
+      ),
+      h("div", { class: "or-divider" }, h("span", null, "or continue with a service account")),
       ...ROLES.map(r => h("button", { class: "role-btn", ...tid(testidFor("login-role", r.clientId)),
         onclick: () => { custom.id.value = r.clientId; custom.sec.focus(); toast(`Prefilled clientId '${r.clientId}' — paste the secret from your vault`, "info", 3500); } },
         h("div", { class: "role-name" }, r.name),

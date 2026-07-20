@@ -10,7 +10,7 @@ import crypto from "node:crypto";
 
 const GOVERNANCE_API_URL = process.env.GOVERNANCE_API_URL || "http://localhost:8001";
 const CLIENT_ID = process.env.GOVERNANCE_CLIENT_ID || "governance-admin";
-const CLIENT_SECRET = process.env.GOVERNANCE_CLIENT_SECRET || "govern-admin-secret-dev";
+const CLIENT_SECRET = process.env.GOVERNANCE_CLIENT_SECRET || "";
 
 let cachedToken: string | null = process.env.GOVERNANCE_TOKEN || null;
 

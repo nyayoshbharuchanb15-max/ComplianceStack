@@ -104,10 +104,13 @@ Retention period 180 days. Lawful basis is legitimate interest.
 # Art. 35(2) [warning].
 
 
+from tests.governance.conftest import CREDS
+
+
 def _admin_token() -> str:
     r = httpx.post(f"{BASE}/auth/token",
                    json={"clientId": "governance-admin",
-                         "clientSecret": "govern-admin-secret-dev"})
+                         "clientSecret": CREDS["governance-admin"]})
     r.raise_for_status()
     return r.json()["accessToken"]
 

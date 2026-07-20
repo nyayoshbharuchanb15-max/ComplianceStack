@@ -1,0 +1,43 @@
+{
+  "summary": "Iteration 5 verified. Backend regression: 36/36 pytest passed (28 existing + 8 new Google Auth E2E). Security fix: POST /api/v1/auth/token with clientId=governance-admin and the old hardcoded secret 'govern-admin-secret-dev' returns HTTP 401; only the env-sourced GOV_ADMIN_SECRET works. Static inspection of /app/orchestrator/config.py confirms _FORBIDDEN_SECRET_VALUES contains all 4 dev-secret strings + 'changeme'/'password'/etc and _require_strong_secret raises InsecureConfigError at startup for any forbidden or <24-char value. Google Auth E2E all 8 tests pass (missing header → 400 MISSING_SESSION_ID, bogus id → 401, fixture id → 200 with role=governance-admin, all 13 scopes incl certs:revoke, Set-Cookie governance_session; /auth/me via cookie and via Bearer session_token; /auth/me unauth → 401 NOT_AUTHENTICATED; JWT grants /api/v1/runs access; /auth/logout → 204 and DB row removed so subsequent /auth/me → 401). Frontend Auditor Workbench verified: [data-testid='login-google-btn'] visible above service-account cards with text 'Sign in with Google'; clicking it attempts navigation to https://auth.emergentagent.com/?redirect=<origin>/ (intercepted via route abort). Simulated Google return by navigating to '<origin>/#session_id=test-fixture-session-id-abc123' — SPA silently POSTed /api/v1/auth/google/session, cleared hash, landed on #/dashboard, sidebar-user-role='governance-admin', sidebar-user-client-id='@google:test.user@governance.local'. Sidebar navigation to Audit Runs works. Signout fires POST /auth/logout, clears sessionStorage, returns to #/login.",
+  "backend_issues": {
+    "critical": [],
+    "minor": [
+      {"endpoint": "N/A (mcp-server/dist)", "issue": "Compiled artifact /app/mcp-server/dist/governance-client.js still contains fallback `process.env.GOVERNANCE_CLIENT_SECRET || 'govern-admin-secret-dev'`. If GOVERNANCE_CLIENT_SECRET is unset the MCP client would attempt to auth with the now-forbidden default (backend rejects with 401 so no actual security leak, but the fallback should be removed for cleanliness)."},
+      {"endpoint": "N/A (mcp-server/dist)", "issue": "/app/mcp-server/dist/status-page.js line 122 still shows the old secret 'govern-admin-secret-dev' in a curl doc example. Update sample text to reference env-sourced secret."}
+    ]
+  },
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": [],
+    "console_errors": [
+      {"file": "workbench.js:570", "error": "TypeError: Cannot read properties of null (reading 'replaceWith') on route change — pre-existing stale-timer pattern, non-blocking (carried over from iteration 4)", "priority": "LOW"},
+      {"file": "workbench.js:638", "error": "TypeError: Cannot read properties of null on runs-tbl/section-body — same stale-timer pattern", "priority": "LOW"},
+      {"file": "workbench.js:762", "error": "TypeError: Cannot read properties of null on ev-recent — events refresh timer keeps firing after leaving page", "priority": "LOW"}
+    ]
+  },
+  "test_report_links": [
+    "/app/test_reports/pytest/iteration_5_results.xml",
+    "/app/tests/governance/test_google_auth.py",
+    "/app/tests/governance/conftest.py"
+  ],
+  "action_items": [
+    "Optional cleanup: purge the last two hardcoded 'govern-admin-secret-dev' occurrences in /app/mcp-server/dist/governance-client.js (line 11) and /app/mcp-server/dist/status-page.js (line 122). Backend already rejects them, but they are lingering in the shipped artifact.",
+    "Optional (carried over from iter 4): null-guard the periodic refresh callbacks in workbench.js at lines 570/638/762 or clear their intervals on route change."
+  ],
+  "critical_code_review_comments": [
+    "Security posture solid: config.py _FORBIDDEN_SECRET_VALUES + _MIN_SECRET_LEN=24 + startup InsecureConfigError branch correctly prevents boot with any of the 4 old dev secrets, empty values, or short values. Verified statically.",
+    "Test suite is now correctly env-sourced via /app/tests/governance/conftest.py — CREDS dict is loaded from /app/backend/.env once. All 4 refactored test modules (test_new_backend_endpoints, test_artifacts_and_citations, test_gap_analysis, test_governance_pipeline) use CREDS[...] instead of hardcoded strings. Good separation.",
+    "Google Auth flow correctly gated by GOV_ALLOW_TEST_AUTH=1 for the fixture escape hatch; production traffic hits real Emergent OAuth. HttpOnly + Secure + SameSite=None cookie set on the session token, JWT (accessToken) returned separately for API bearer use. Two-token pattern is fine.",
+    "workbench.js: session_id exchange happens BEFORE router run (line ~447-465), which correctly prevents the SPA from briefly flashing #/login before landing on #/dashboard. Hash is scrubbed via history.replaceState. Good."
+  ],
+  "updated_files": [],
+  "success_rate": {"backend": "100%", "frontend": "100%"},
+  "test_credentials": "Google fixture session_id=test-fixture-session-id-abc123 works; service-account secrets sourced from GOV_ADMIN_SECRET etc in /app/backend/.env; old dev secrets globally rejected.",
+  "seed_data_creation": "None new — reused existing runs from prior iterations.",
+  "retest_needed": false,
+  "main_agent_can_self_test": true,
+  "context_for_next_testing_agent": "Two lingering hardcoded 'govern-admin-secret-dev' strings in /app/mcp-server/dist (compiled JS). Not a security issue (backend enforces), but should be cleaned up in mcp-server source + rebuilt. All 36 pytest tests plus the Google-Auth E2E frontend flow are green.",
+  "rca of the issue": "N/A — no blocking issues. Minor code-hygiene item: mcp-server/dist artifacts still contain the deprecated dev-secret string as a fallback (governance-client.js) and in a doc comment (status-page.js). Backend rejects it, so this is cleanup only."
+}
